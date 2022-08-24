@@ -1,0 +1,202 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"workspaceName": {
+			"type": "string",
+			"metadata": "Workspace name",
+			"defaultValue": "techdeliverydatalaketesting"
+		},
+		"FnO_TechDeliverySynapse_connectionString": {
+			"type": "secureString",
+			"metadata": "Secure string for 'connectionString' of 'FnO_TechDeliverySynapse'"
+		},
+		"d365techdelivery_CustTable_password": {
+			"type": "secureString",
+			"metadata": "Secure string for 'password' of 'd365techdelivery_CustTable'"
+		},
+		"techdeliverydatalaketesting-WorkspaceDefaultSqlServer_connectionString": {
+			"type": "secureString",
+			"metadata": "Secure string for 'connectionString' of 'techdeliverydatalaketesting-WorkspaceDefaultSqlServer'"
+		},
+		"d365techdelivery_CustTable_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://d365techdelivery-dev.sandbox.operations.dynamics.com/data"
+		},
+		"d365techdelivery_CustTable_properties_typeProperties_userName": {
+			"type": "string",
+			"defaultValue": "greggra@stoneridgesoftware.com"
+		},
+		"techdeliverydatalaketesting-WorkspaceDefaultStorage_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://techdeliverydatalake.dfs.core.windows.net"
+		}
+	},
+	"variables": {
+		"workspaceId": "[concat('Microsoft.Synapse/workspaces/', parameters('workspaceName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('workspaceName'), '/FnO_TechDeliverySynapse')]",
+			"type": "Microsoft.Synapse/workspaces/linkedServices",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"annotations": [],
+				"type": "AzureSqlDW",
+				"typeProperties": {
+					"connectionString": "[parameters('FnO_TechDeliverySynapse_connectionString')]"
+				},
+				"connectVia": {
+					"referenceName": "AutoResolveIntegrationRuntime",
+					"type": "IntegrationRuntimeReference"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/integrationRuntimes/AutoResolveIntegrationRuntime')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/d365techdelivery_CustTable')]",
+			"type": "Microsoft.Synapse/workspaces/linkedServices",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"annotations": [],
+				"type": "OData",
+				"typeProperties": {
+					"url": "[parameters('d365techdelivery_CustTable_properties_typeProperties_url')]",
+					"authenticationType": "Windows",
+					"userName": "[parameters('d365techdelivery_CustTable_properties_typeProperties_userName')]",
+					"password": {
+						"type": "SecureString",
+						"value": "[parameters('d365techdelivery_CustTable_password')]"
+					}
+				},
+				"connectVia": {
+					"referenceName": "AutoResolveIntegrationRuntime",
+					"type": "IntegrationRuntimeReference"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/integrationRuntimes/AutoResolveIntegrationRuntime')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/techdeliverydatalaketesting-WorkspaceDefaultSqlServer')]",
+			"type": "Microsoft.Synapse/workspaces/linkedServices",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"parameters": {
+					"DBName": {
+						"type": "String"
+					}
+				},
+				"annotations": [],
+				"type": "AzureSqlDW",
+				"typeProperties": {
+					"connectionString": "[parameters('techdeliverydatalaketesting-WorkspaceDefaultSqlServer_connectionString')]"
+				},
+				"connectVia": {
+					"referenceName": "AutoResolveIntegrationRuntime",
+					"type": "IntegrationRuntimeReference"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/integrationRuntimes/AutoResolveIntegrationRuntime')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/techdeliverydatalaketesting-WorkspaceDefaultStorage')]",
+			"type": "Microsoft.Synapse/workspaces/linkedServices",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobFS",
+				"typeProperties": {
+					"url": "[parameters('techdeliverydatalaketesting-WorkspaceDefaultStorage_properties_typeProperties_url')]"
+				},
+				"connectVia": {
+					"referenceName": "AutoResolveIntegrationRuntime",
+					"type": "IntegrationRuntimeReference"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/integrationRuntimes/AutoResolveIntegrationRuntime')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/AutoResolveIntegrationRuntime')]",
+			"type": "Microsoft.Synapse/workspaces/integrationRuntimes",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"type": "Managed",
+				"typeProperties": {
+					"computeProperties": {
+						"location": "AutoResolve",
+						"dataFlowProperties": {
+							"computeType": "General",
+							"coreCount": 8,
+							"timeToLive": 0
+						}
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/WorkspaceSystemIdentity')]",
+			"type": "Microsoft.Synapse/workspaces/credentials",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"type": "ManagedIdentity",
+				"typeProperties": {}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/CopySynapseTableToOnPrem')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "SynapseAdmin"
+				},
+				"content": {
+					"query": "-- Copy data from Syanapse to OnPrem\n-- using a linked server\nCREATE DATABASE FnO_RawOnPrem\nGO\n\nEXEC master.dbo.sp_addlinkedserver\n                        @server = N'SynapseSQL',@srvproduct=N'', @provider=N'MSOLEDBSQL',\n                        @datasrc=N'techdeliverydatalaketesting-ondemand.sql.azuresynapse.net', \n                        @catalog=N'master';\n\nEXEC master.dbo.sp_addlinkedsrvlogin @rmtsrvname=N'SynapseSQL', @useself=N'False',\n                       @locallogin=NULL,\n                       @rmtuser=N'sqladminuser',@rmtpassword='G2qCNH41X4c0oL19O#iB'\nGO\n\nEXEC master.dbo.sp_serveroption @server=N'SynapseSQL', \n                       @optname=N'remote proc transaction promotion', @optvalue=N'false'\nGO\nEXEC master.dbo.sp_serveroption @server=N'SynapseSQL', \n                       @optname=N'rpc', @optvalue=N'true'\nGO\nEXEC master.dbo.sp_serveroption @server=N'SynapseSQL',\n                       @optname=N'rpc out', @optvalue=N'true'\nGO\n\n\nIF  EXISTS (SELECT * FROM FnO_RawOnPrem.sys.objects WHERE object_id = OBJECT_ID(N'CustTable') AND type in (N'U'))\nDROP TABLE CustTable\nGO\n\nselect * into FnO_RawOnPrem.dbo.CustTable from SynapseSQL.FnO.raw.CustTable\nGO\n\nIF  EXISTS (SELECT * FROM FnO_RawOnPrem.sys.objects WHERE object_id = OBJECT_ID(N'CustInvoiceTrans') AND type in (N'U'))\nDROP TABLE FnO_RawOnPrem.dbo.CustInvoiceTrans\nGO\n\nselect SalesId, DefaultDimension, DlvDate, InventQty, InvoiceId \n  into FnO_RawOnPrem.dbo.CustInvoiceTrans \n  from SynapseSQL.FnO.raw.CustInvoiceTrans\nGO",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "FnO",
+						"poolName": "Built-in"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/KillAll')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "SynapseAdmin"
+				},
+				"content": {
+					"query": "USE [master] \nGO \n\nSELECT 'KILL ' + CAST(session_id AS VARCHAR(10)) AS 'SQL Command'\nFROM sys.dm_exec_sessions\nWHERE is_user_process = 1\nAND database_id = DB_ID('FnO'); --specify database name\n\ndrop database fno",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "master",
+						"poolName": "Built-in"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		}
+	]
+}

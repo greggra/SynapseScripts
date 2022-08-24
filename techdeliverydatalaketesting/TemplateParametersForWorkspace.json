@@ -1,0 +1,27 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"workspaceName": {
+			"value": "techdeliverydatalaketesting"
+		},
+		"FnO_TechDeliverySynapse_connectionString": {
+			"value": ""
+		},
+		"d365techdelivery_CustTable_password": {
+			"value": ""
+		},
+		"techdeliverydatalaketesting-WorkspaceDefaultSqlServer_connectionString": {
+			"value": ""
+		},
+		"d365techdelivery_CustTable_properties_typeProperties_url": {
+			"value": "https://d365techdelivery-dev.sandbox.operations.dynamics.com/data"
+		},
+		"d365techdelivery_CustTable_properties_typeProperties_userName": {
+			"value": "greggra@stoneridgesoftware.com"
+		},
+		"techdeliverydatalaketesting-WorkspaceDefaultStorage_properties_typeProperties_url": {
+			"value": "https://techdeliverydatalake.dfs.core.windows.net"
+		}
+	}
+}
