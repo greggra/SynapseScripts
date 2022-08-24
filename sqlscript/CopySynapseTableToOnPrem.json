@@ -1,0 +1,17 @@
+{
+	"name": "CopySynapseTableToOnPrem",
+	"properties": {
+		"content": {
+			"query": "-- Copy data from Syanapse to OnPrem\n-- using a linked server\nCREATE DATABASE FnO_RawOnPrem\nGO\n\nEXEC master.dbo.sp_addlinkedserver\n                        @server = N'SynapseSQL',@srvproduct=N'', @provider=N'MSOLEDBSQL',\n                        @datasrc=N'techdeliverydatalaketesting-ondemand.sql.azuresynapse.net', \n                        @catalog=N'master';\n\nEXEC master.dbo.sp_addlinkedsrvlogin @rmtsrvname=N'SynapseSQL', @useself=N'False',\n                       @locallogin=NULL,\n                       @rmtuser=N'sqladminuser',@rmtpassword='G2qCNH41X4c0oL19O#iB'\nGO\n\nEXEC master.dbo.sp_serveroption @server=N'SynapseSQL', \n                       @optname=N'remote proc transaction promotion', @optvalue=N'false'\nGO\nEXEC master.dbo.sp_serveroption @server=N'SynapseSQL', \n                       @optname=N'rpc', @optvalue=N'true'\nGO\nEXEC master.dbo.sp_serveroption @server=N'SynapseSQL',\n                       @optname=N'rpc out', @optvalue=N'true'\nGO\n\n\nIF  EXISTS (SELECT * FROM FnO_RawOnPrem.sys.objects WHERE object_id = OBJECT_ID(N'CustTable') AND type in (N'U'))\nDROP TABLE CustTable\nGO\n\nselect * into FnO_RawOnPrem.dbo.CustTable from SynapseSQL.FnO.raw.CustTable\nGO\n\nIF  EXISTS (SELECT * FROM FnO_RawOnPrem.sys.objects WHERE object_id = OBJECT_ID(N'CustInvoiceTrans') AND type in (N'U'))\nDROP TABLE FnO_RawOnPrem.dbo.CustInvoiceTrans\nGO\n\nselect SalesId, DefaultDimension, DlvDate, InventQty, InvoiceId \n  into FnO_RawOnPrem.dbo.CustInvoiceTrans \n  from SynapseSQL.FnO.raw.CustInvoiceTrans\nGO",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "FnO",
+				"poolName": "Built-in"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}
