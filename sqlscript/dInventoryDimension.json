@@ -1,0 +1,20 @@
+{
+	"name": "dInventoryDimension",
+	"properties": {
+		"folder": {
+			"name": "VirtualDW"
+		},
+		"content": {
+			"query": "select * from raw.salesline",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "fno",
+				"poolName": "Built-in"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

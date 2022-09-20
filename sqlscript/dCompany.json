@@ -1,0 +1,20 @@
+{
+	"name": "dCompany",
+	"properties": {
+		"folder": {
+			"name": "VirtualDW"
+		},
+		"content": {
+			"query": "use Fno\nGO\n\n\n-- drop external table dw.dCompany\ncreate external table dw.dCompany with (\n    location = 'DataWarehouse/dCompany'\n   ,data_source = ParquetStorage\n   ,file_format = ParquetFormat\n) as select distinct \n            upper(DataArea) as DataAreaId\n           ,case when DataArea = 'DAT' then 'Do Not Use' else Name end as Name\n       from [raw].[CompanyInfo]\n      order by 1\n\n\nselect * from dw.dCompany",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "fno",
+				"poolName": "Built-in"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

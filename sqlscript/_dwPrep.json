@@ -1,0 +1,20 @@
+{
+	"name": "_dwPrep",
+	"properties": {
+		"folder": {
+			"name": "VirtualDW"
+		},
+		"content": {
+			"query": "use fno\ngo\n\ncreate schema dw\ngo\n\ncreate external file format ParquetFileFormat with\n  ( format_type = PARQUET,\n    data_compression = 'org.apache.hadoop.io.compress.SnappyCodec' )\ngo\n\ncreate external data source ParquetDataSource\n  with (location = N'https://techdeliverydatalake.dfs.core.windows.net/parquet/'\n       ,credential = [dynamics365_financeandoperations_d365techdelivery_dev_sandbox])\ngo\n",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "fno",
+				"poolName": "Built-in"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}
