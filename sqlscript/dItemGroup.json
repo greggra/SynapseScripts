@@ -1,0 +1,20 @@
+{
+	"name": "dItemGroup",
+	"properties": {
+		"folder": {
+			"name": "VirtualDW"
+		},
+		"content": {
+			"query": "use FnO\ngo\n\n-- Need to delete the storage in data lake\ndrop external table dw.dItemGroup\ngo\n\ncreate external table dw.dItemGroup with (\n    location = 'DataWarehouse/dItemGroup'\n   ,data_source = ParquetStorage\n   ,file_format = ParquetFormat\n) as \n    select * from raw.vwDimItemGroup\ngo\n",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "fno",
+				"poolName": "Built-in"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

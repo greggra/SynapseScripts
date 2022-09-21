@@ -2,7 +2,7 @@
 	"name": "fInvoice",
 	"properties": {
 		"folder": {
-			"name": "VirtualDW"
+			"name": "VirtualDW/InProgress"
 		},
 		"content": {
 			"query": "select top 100 *\n  from raw.CustInvoiceTrans",

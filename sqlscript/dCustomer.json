@@ -2,7 +2,7 @@
 	"name": "dCustomer",
 	"properties": {
 		"folder": {
-			"name": "VirtualDW"
+			"name": "VirtualDW/InProgress"
 		},
 		"content": {
 			"query": "",

@@ -5,7 +5,7 @@
 			"name": "VirtualDW"
 		},
 		"content": {
-			"query": "use FnO\ngo\n\n-- Need to delete the storage in data lake\ndrop external table dw.dCostCenter\ngo\n\ncreate external table dw.dCostCenter with (\n    location = 'DataWarehouse/dCostCenter'\n   ,data_source = ParquetStorage\n   ,file_format = ParquetFormat\n) as \n    select * from raw.vwDimCostCenter\ngo\n",
+			"query": "use FnO\ngo\n\n-- Need to delete the storage in data lake\ndrop external table dw.dCostCenter\ngo\n\ncreate external table dw.dCostCenter with (\n    location = 'DataWarehouse/dCostCenter'\n   ,data_source = ParquetStorage\n   ,file_format = ParquetFormat\n) as \n    select * from raw.vwDimCostCenter\ngo\n\nselect * from dw.dCostCenter",
 			"metadata": {
 				"language": "sql"
 			},
