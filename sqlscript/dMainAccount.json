@@ -1,0 +1,20 @@
+{
+	"name": "dMainAccount",
+	"properties": {
+		"folder": {
+			"name": "VirtualDW"
+		},
+		"content": {
+			"query": "use FnO\ngo\n\n-- Need to delete the storage in data lake\ndrop external table dw.dMainAccount\ngo\n\ncreate external table dw.dMainAccount with (\n    location = 'DataWarehouse/dMainAccount'\n   ,data_source = ParquetStorage\n   ,file_format = ParquetFormat\n) as \n    select * from raw.vwDimMainAccount\ngo\n\nselect * from dw.dMainAccount",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "fno",
+				"poolName": "Built-in"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

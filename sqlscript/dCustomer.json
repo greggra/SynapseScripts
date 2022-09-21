@@ -1,16 +1,16 @@
 {
-	"name": "fInvoice",
+	"name": "dCustomer",
 	"properties": {
 		"folder": {
 			"name": "VirtualDW"
 		},
 		"content": {
-			"query": "select top 100 *\n  from raw.CustInvoiceTrans",
+			"query": "",
 			"metadata": {
 				"language": "sql"
 			},
 			"currentConnection": {
-				"databaseName": "master",
+				"databaseName": "fno",
 				"poolName": "Built-in"
 			},
 			"resultLimit": 5000

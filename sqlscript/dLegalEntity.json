@@ -1,0 +1,20 @@
+{
+	"name": "dLegalEntity",
+	"properties": {
+		"folder": {
+			"name": "VirtualDW"
+		},
+		"content": {
+			"query": "use FnO\ngo\n\n-- Need to delete the storage in data lake\ndrop external table dw.dLegalEntity\ngo\n\ncreate external table dw.dLegalEntity with (\n    location = 'DataWarehouse/dLegalEntity'\n   ,data_source = ParquetStorage\n   ,file_format = ParquetFormat\n) as \n    select * from raw.vwDimLegalEntity\ngo\n",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "fno",
+				"poolName": "Built-in"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

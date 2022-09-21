@@ -1,0 +1,20 @@
+{
+	"name": "dItem",
+	"properties": {
+		"folder": {
+			"name": "VirtualDW"
+		},
+		"content": {
+			"query": "select top 100 ItemId\n              ,upper(DataAreaId) as DataAreaId\n              ,coalesce(Name , 'Unknown') as Name\n              ,CostCenter, CostCenterValue\n  from raw.InventTable it\n    left outer join raw.EcoResProductTranslation n on n.Product = it.Product and LanguageId = 'EN-US'\n    left outer join raw.DimensionAttributeValueSet d on d.RecId = it.DefaultDimension\n\n\nselect * from raw.DimensionAttributeValueSet d inner join raw.InventTable it on it.DefaultDimension = d.RecId\n\nSELECT T1.DISPLAYVALUE AS DISPLAYVALUE, T1.DIMENSIONATTRIBUTEVALUESET AS DEFAULTDIMENSION, T1.PARTITION AS PARTITION, T1.RECID AS RECID, T2.ENTITYINSTANCE AS ENTITYINSTANCE, T2.PARTITION AS PARTITION#2, T3.REPORTCOLUMNNAME AS REPORTCOLUMNNAME, T3.RECID AS DIMENSIONATTRIBUTEID, T3.BACKINGENTITYTYPE AS BACKINGENTITYTYPE, T3.KEYATTRIBUTE AS KEYATTRIBUTE, T3.NAMEATTRIBUTE AS NAMEATTRIBUTE, T3.NAME AS NAME, T3.PARTITION AS PARTITION#3 \nFROM DIMENSIONATTRIBUTEVALUESETITEM T1 \nCROSS JOIN DIMENSIONATTRIBUTEVALUE T2 \nCROSS JOIN DIMENSIONATTRIBUTE T3 \nWHERE((( T1.DIMENSIONATTRIBUTEVALUE  =  T2.RECID)  AND ( T1.PARTITION  =  T2.PARTITION))  AND (( T2.DIMENSIONATTRIBUTE  =  T3.RECID)  AND ( T2.PARTITION  =  T3.PARTITION)))\n\nselect t.name, c.name \n      from sys.all_columns c \n             inner join \n           sys.tables t \n             on t.object_id = c.object_id \n     where t.name = 'DimensionAttributeValueSet'\n\n\nselect distinct CostCenter, CostCenterValue from raw.DimensionAttributeValueSet\nselect * from raw.DimensionFinancialTag\nselect * from raw.FinancialTagCategory\n\nselect\n    gje.AccountingDate as AccountingDate,\n    gje.DocumentDate as DocumentDate,\n    gje.DocumentNumber as DocumentNumber,\n\tgje.JournalNumber as JournalNumber,\n\tdavc.DisplayValue as LedgerDimension,\n\tgjae.MainAccount as MainAccount_FK,\n    davc.CostCenter as CostCenter_FK,\n    davc.Department as Department_FK,\n    davc.BusinessUnit as BusinessUnit_FK,\n    davc.ItemGroup as ItemGroup_FK,\n\tl.RECID as LegalEntity_FK,\n    gjae.ACCOUNTINGCURRENCYAMOUNT as [Amount(AccountingCurrency)],\n    l.ACCOUNTINGCURRENCY as AccountingCurrency,\n\tgjae.REPORTINGCURRENCYAMOUNT as [Amount(ReportingCurrency)],\n\tl.REPORTINGCURRENCY as ReportingCurrency,\n\tgjae.TransactionCurrencyAmount as [Amount(TransactionCurrency)],\n\tgjae.TransactionCurrencyCode as TransactionCurrency,\n\tgje.SubLedgerVoucher as SubLedgerVoucher\nfrom raw.GeneralJournalAccountEntry gjae\njoin raw.GeneralJournalEntry gje on gjae.GeneralJournalEntry = gje.RECID\njoin raw.Ledger l on gje.Ledger = l.RECID\njoin raw.DimensionAttributeValueCombination davc on gjae.LedgerDimension = davc.RECID",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "fno",
+				"poolName": "Built-in"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}
