@@ -5,7 +5,7 @@
 			"name": "VirtualDW"
 		},
 		"content": {
-			"query": "use FnO\ngo\n\n-- Need to delete the storage in data lake\ndrop external table dw.dBusinessUnit\ngo\n\ncreate external table dw.dBusinessUnit with (\n    location = 'DataWarehouse/dBusinessUnit'\n   ,data_source = ParquetStorage\n   ,file_format = ParquetFormat\n) as \n    select * from raw.vwDimBusinessUnit\ngo\n",
+			"query": "use FnO\ngo\n\ncreate or alter view raw.vw_dBusinessUnit as \n  select t1.RecId as [Key]\n        ,t1.OMOperatingUnitNumber as BU\n        ,t1.Name as BusinessUnit \n    from raw.DirPartyTable t1 \n   where t1.OMOperatingUnitType = 4 \n     and t1.InstanceRelationType = 8363\ngo\n\n-- Need to delete the storage in data lake\ndrop external table dw.dBusinessUnit\ngo\n\ncreate external table dw.dBusinessUnit with (\n    location = 'DataWarehouse/dBusinessUnit'\n   ,data_source = ParquetStorage\n   ,file_format = ParquetFormat\n) as \n    select * from raw.vw_dBusinessUnit\ngo\n\n-- select * from raw.vw_dBusinessUnit\n-- select * from dw.dBusinessUnit",
 			"metadata": {
 				"language": "sql"
 			},

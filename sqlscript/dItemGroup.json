@@ -5,7 +5,7 @@
 			"name": "VirtualDW"
 		},
 		"content": {
-			"query": "use FnO\ngo\n\n-- Need to delete the storage in data lake\ndrop external table dw.dItemGroup\ngo\n\ncreate external table dw.dItemGroup with (\n    location = 'DataWarehouse/dItemGroup'\n   ,data_source = ParquetStorage\n   ,file_format = ParquetFormat\n) as \n    select * from raw.vwDimItemGroup\ngo\n",
+			"query": "use FnO\ngo\n\ncreate or alter view raw.vw_dItemGroup as \n  select ig.RecId as [Key]\n        ,ig.ItemGroupId\n\t      ,ig.Name as ItemGroup\n    from raw.InventItemGroup ig\ngo\n\n-- Need to delete the storage in data lake\ndrop external table dw.dItemGroup\ngo\n\ncreate external table dw.dItemGroup with (\n    location = 'DataWarehouse/dItemGroup'\n   ,data_source = ParquetStorage\n   ,file_format = ParquetFormat\n) as \n    select * from raw.vw_dItemGroup\ngo\n\n-- select * from raw.vw_dItemGroup\n-- select * from dw.dItemGroup",
 			"metadata": {
 				"language": "sql"
 			},
