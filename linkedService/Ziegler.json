@@ -1,0 +1,12 @@
+{
+	"name": "Ziegler",
+	"properties": {
+		"description": "Demo for creating DataFlows in Synapse Studio",
+		"annotations": [],
+		"type": "PowerBIWorkspace",
+		"typeProperties": {
+			"workspaceID": "a0f22374-15dc-4c7d-8d98-e1e13691873a",
+			"tenantID": "2e14a5b1-fbf8-415b-bc7d-93e20829e510"
+		}
+	}
+}
