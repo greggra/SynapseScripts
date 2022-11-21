@@ -5,7 +5,7 @@
 			"name": "VirtualDW"
 		},
 		"content": {
-			"query": "use FnO\ngo\n\ncreate or alter view raw.vw_dMainAccount as \n  select m.RecId as [Key]\n\t      ,m.MainAccountId as MainAccount\n\t      ,m.Name\n\t      ,l.Name as ChartOfAccountName\n    from raw.MainAccount m\n         inner join raw.LedgerChartOfAccounts l on l.RecId = m.LedgerChartOfAccounts\ngo\n\n-- Need to delete the storage in data lake\ndrop external table dw.dMainAccount\ngo\n\ncreate external table dw.dMainAccount with (\n    location = 'DataWarehouse/dMainAccount'\n   ,data_source = ParquetStorage\n   ,file_format = ParquetFormat\n) as \n    select * from raw.vw_dMainAccount\ngo\n\n-- select * from raw.vw_dMainAccount\n-- select * from dw.dMainAccount",
+			"query": "use FnO\ngo\n\ncreate or alter view raw.vw_dMainAccount as \n  select m.RecId as [Key]\n\t      ,m.MainAccountId as MainAccount\n\t      ,m.Name\n\t      ,l.Name as ChartOfAccountName\n    from raw.MainAccount m\n         inner join raw.LedgerChartOfAccounts l on l.RecId = m.LedgerChartOfAccounts\ngo\n\n-- Need to delete the storage in data lake\ndrop external table dw.dMainAccount\ngo\n\ncreate external table dw.dMainAccount with (\n    location = 'DataWarehouse/dMainAccount'\n   ,data_source = ParquetStorage\n   ,file_format = ParquetFormat\n) as \n    select * from raw.vw_dMainAccount\ngo\n\n-- select * from raw.MainAccount\n-- select * from raw.LedgerChartOfAccounts\n-- select * from raw.vw_dMainAccount\n-- select * from dw.dMainAccount where ChartOfAccountName = 'Shared'\n-- select count(*) from dw.dMainAccount\n-- select count(*) from dw.dMainAccount where ChartOfAccountName = 'Shared'",
 			"metadata": {
 				"language": "sql"
 			},
