@@ -1,0 +1,17 @@
+{
+	"name": "Adhoc",
+	"properties": {
+		"content": {
+			"query": "use FnO\nGO\n",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "fno",
+				"poolName": "Built-in"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}
