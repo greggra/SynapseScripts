@@ -1,0 +1,20 @@
+{
+	"name": "fGeneralLedger_BIG",
+	"properties": {
+		"folder": {
+			"name": "VirtualDW"
+		},
+		"content": {
+			"query": "-- For demo purposes\n\ncreate external table dw.fGeneralLedger_BIG with (\n    location = 'DataWarehouse/fGeneralLedger_BIG'\n   ,data_source = ParquetDataSource\n   ,file_format = ParquetFileFormat\n) as \n    select gl.* \n      from dw.fGeneralLedger gl\n           cross join (select top(10000) row_number() over (order by A.[Key]) as N from dw.dMainAccount A cross join dw.dMainAccount B) cj\ngo\n\n-- NOTE: Too big!\n-- select count(*) from dw.fGeneralLedger_BIG\n\nselect count_big(*) \n  from dw.fGeneralLedger_BIG\n\nselect d.[Year]\n      ,cc.CostCenter\n      ,sum(f.[Amount(AccountingCurrency)])\n  from dw.fGeneralLedger_BIG f\n       inner join dw.dCostCenter cc on cc.[Key] = f.CostCenter_FK\n       inner join dw.dDate d on d.[Date] = f.AccountingDate\n where CostCenter in ('Quality Control', 'Administration', 'Super')\n group by cc.CostCenter, d.[Year] \n order by 1\n\n",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "fno",
+				"poolName": "Built-in"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

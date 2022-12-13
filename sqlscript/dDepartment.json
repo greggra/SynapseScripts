@@ -5,7 +5,7 @@
 			"name": "VirtualDW"
 		},
 		"content": {
-			"query": "use FnO\ngo\n\ncreate or alter view raw.vw_dDepartment as \n  select t1.RecId as [Key]\n        ,t1.OMOperatingUnitNumber as Dept\n        ,t1.Name as Department \n    from raw.DirPartyTable t1 \n   where t1.OMOperatingUnitType = 1 \n     and t1.InstanceRelationType = 8363\ngo\n\n-- Need to delete the storage in data lake\ndrop external table dw.dDepartment\ngo\n\ncreate external table dw.dDepartment with (\n    location = 'DataWarehouse/dDepartment'\n   ,data_source = ParquetStorage\n   ,file_format = ParquetFormat\n) as \n    select * from raw.vw_dDepartment\ngo\n\n-- select * from raw.vw_dDepartment\n-- select * from dw.dDepartment",
+			"query": "use FnO\ngo\n\ncreate or alter view raw.vw_dDepartment as \n  select t1.RecId as [Key]\n        ,t1.OMOperatingUnitNumber as Dept\n        ,t1.Name as Department \n    from raw.DirPartyTable t1 \n   where t1.OMOperatingUnitType = 1 \n     and t1.InstanceRelationType = 8363\ngo\n\n/*\n-- Need to delete the storage in data lake\ndrop external table dw.dDepartment\ngo\n*/\n\ncreate external table dw.dDepartment with (\n    location = 'DataWarehouse/dDepartment'\n   ,data_source = ParquetDataSource\n   ,file_format = ParquetFileFormat\n) as \n    select * from raw.vw_dDepartment\ngo\n\n-- select * from raw.vw_dDepartment\n-- select * from dw.dDepartment",
 			"metadata": {
 				"language": "sql"
 			},

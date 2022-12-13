@@ -5,7 +5,7 @@
 			"name": "VirtualDW"
 		},
 		"content": {
-			"query": "use FnO\ngo\n\ncreate or alter view raw.vw_dCompany as \nwith distinctCompanies as (\n  select distinct \n         upper(DataArea) as DataAreaId\n        ,case when DataArea = 'DAT' then 'Do Not Use' else Name end as Name\n    from raw.CompanyInfo\n)\nselect cast(row_number() over(order by DataAreaId) as int) AS [Key]\n      ,DataAreaId\n      ,Name\n  from distinctCompanies\ngo\n\n-- Need to delete the storage in data lake\ndrop external table dw.dCompany\ngo\n\ncreate external table dw.dCompany with (\n    location = 'DataWarehouse/dCompany'\n   ,data_source = ParquetStorage\n   ,file_format = ParquetFormat\n) as \n    select * from raw.vw_dCompany\n     order by DataAreaId\ngo\n\n\n-- select * from raw.vw_dCompany\n-- select * from dw.dCompany",
+			"query": "use FnO\ngo\n\ncreate or alter view raw.vw_dCompany as \nwith distinctCompanies as (\n  select distinct \n         upper(DataArea) as DataAreaId\n        ,case when DataArea = 'DAT' then 'Do Not Use' else Name end as Name\n    from raw.CompanyInfo\n)\nselect cast(row_number() over(order by DataAreaId) as int) AS [Key]\n      ,DataAreaId\n      ,Name\n  from distinctCompanies\ngo\n\n/*\n-- Need to delete the storage in data lake\ndrop external table dw.dCompany\ngo\n*/\n\ncreate external table dw.dCompany with (\n    location = 'DataWarehouse/dCompany'\n   ,data_source = ParquetDataSource\n   ,file_format = ParquetFileFormat\n) as \n    select * from raw.vw_dCompany\n     order by DataAreaId\ngo\n\n\n-- select * from raw.vw_dCompany\n-- select * from dw.dCompany",
 			"metadata": {
 				"language": "sql"
 			},

@@ -5,7 +5,7 @@
 			"name": "VirtualDW"
 		},
 		"content": {
-			"query": "use FnO\ngo\n\ncreate or alter view raw.vw_dLegalEntity as \n  select l.RecId as [Key]\n        ,upper(dpt.DataArea) as DataAreaId\n        ,dpt.Name as CompanyName   \n    from raw.Ledger l\n         inner join raw.DirPartyTable dpt on l.PrimaryForLegalEntity = dpt.RecId\ngo\n\n-- Need to delete the storage in data lake\ndrop external table dw.dLegalEntity\ngo\n\ncreate external table dw.dLegalEntity with (\n    location = 'DataWarehouse/dLegalEntity'\n   ,data_source = ParquetStorage\n   ,file_format = ParquetFormat\n) as \n    select * from raw.vw_dLegalEntity\ngo\n\n-- select * from raw.vw_dLegalEntity\n-- select * from dw.dLegalEntity",
+			"query": "use FnO\ngo\n\ncreate view raw.vw_dLegalEntity as \n  select l.RecId as [Key]\n        ,upper(dpt.DataArea) as DataAreaId\n        ,dpt.Name as CompanyName   \n    from raw.Ledger l\n         inner join raw.DirPartyTable dpt on l.PrimaryForLegalEntity = dpt.RecId\ngo\n\n/*\n-- Need to delete the storage in data lake\ndrop external table dw.dLegalEntity\ngo\n*/\n\ncreate external table dw.dLegalEntity with (\n    location = 'DataWarehouse/dLegalEntity'\n   ,data_source = ParquetDataSource\n   ,file_format = ParquetFileFormat\n) as \n    select * from raw.vw_dLegalEntity\ngo\n\n-- select * from raw.vw_dLegalEntity\n-- select * from dw.dLegalEntity",
 			"metadata": {
 				"language": "sql"
 			},
