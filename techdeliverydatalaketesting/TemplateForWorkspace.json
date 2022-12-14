@@ -17,7 +17,8 @@
 		},
 		"techdeliverydatalaketesting-WorkspaceDefaultSqlServer_connectionString": {
 			"type": "secureString",
-			"metadata": "Secure string for 'connectionString' of 'techdeliverydatalaketesting-WorkspaceDefaultSqlServer'"
+			"metadata": "Secure string for 'connectionString' of 'techdeliverydatalaketesting-WorkspaceDefaultSqlServer'",
+			"defaultValue": "Integrated Security=False;Encrypt=True;Connection Timeout=30;Data Source=tcp:techdeliverydatalaketesting.sql.azuresynapse.net,1433;Initial Catalog=@{linkedService().DBName}"
 		},
 		"d365techdelivery_CustTable_properties_typeProperties_url": {
 			"type": "string",
@@ -37,6 +38,616 @@
 	},
 	"resources": [
 		{
+			"name": "[concat(parameters('workspaceName'), '/PartitionBySize')]",
+			"type": "Microsoft.Synapse/workspaces/pipelines",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"activities": [
+					{
+						"name": "CSVOrParquet",
+						"type": "Switch",
+						"dependsOn": [
+							{
+								"activity": "Get Metadata",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"on": {
+								"value": "@toLower(pipeline().parameters.EXT)",
+								"type": "Expression"
+							},
+							"cases": [
+								{
+									"value": ".parquet",
+									"activities": [
+										{
+											"name": "PartitionBySize_parquet",
+											"type": "ExecuteDataFlow",
+											"dependsOn": [],
+											"policy": {
+												"timeout": "7.00:00:00",
+												"retry": 0,
+												"retryIntervalInSeconds": 30,
+												"secureOutput": false,
+												"secureInput": false
+											},
+											"userProperties": [],
+											"typeProperties": {
+												"dataflow": {
+													"referenceName": "PartitionBySize_parquet",
+													"type": "DataFlowReference",
+													"parameters": {
+														"FileName": {
+															"value": "'@{pipeline().parameters.FileName}'",
+															"type": "Expression"
+														},
+														"Partition": {
+															"value": "@max(div(activity('Get Metadata').output.Size, mul(pipeline().parameters.PartitionSizeMB,1000000)),1)",
+															"type": "Expression"
+														}
+													},
+													"datasetParameters": {
+														"InputFile": {
+															"Container": {
+																"value": "@pipeline().parameters.Container",
+																"type": "Expression"
+															},
+															"Folder": {
+																"value": "@pipeline().parameters.SourceFolder",
+																"type": "Expression"
+															},
+															"FileName": {
+																"value": "@pipeline().parameters.FileName",
+																"type": "Expression"
+															}
+														},
+														"PartitionFile": {
+															"Container": {
+																"value": "@pipeline().parameters.Container",
+																"type": "Expression"
+															},
+															"Folder": {
+																"value": "@pipeline().parameters.TargetFolder",
+																"type": "Expression"
+															}
+														}
+													}
+												},
+												"staging": {},
+												"compute": {
+													"coreCount": 8,
+													"computeType": "General"
+												},
+												"traceLevel": "Fine"
+											}
+										}
+									]
+								}
+							],
+							"defaultActivities": [
+								{
+									"name": "PartitionBySize",
+									"type": "ExecuteDataFlow",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataflow": {
+											"referenceName": "PartitionBySize_csv",
+											"type": "DataFlowReference",
+											"parameters": {
+												"FileName": {
+													"value": "'@{pipeline().parameters.FileName}'",
+													"type": "Expression"
+												},
+												"Partition": {
+													"value": "@max(div(activity('Get Metadata').output.Size, mul(pipeline().parameters.PartitionSizeMB,1000000)),1)",
+													"type": "Expression"
+												}
+											},
+											"datasetParameters": {
+												"InputFile": {
+													"Container": {
+														"value": "@pipeline().parameters.Container",
+														"type": "Expression"
+													},
+													"Folder": {
+														"value": "@pipeline().parameters.SourceFolder",
+														"type": "Expression"
+													},
+													"FileName": {
+														"value": "@pipeline().parameters.FileName",
+														"type": "Expression"
+													}
+												},
+												"PartitionFile": {
+													"Container": {
+														"value": "@pipeline().parameters.Container",
+														"type": "Expression"
+													},
+													"Folder": {
+														"value": "@pipeline().parameters.TargetFolder",
+														"type": "Expression"
+													}
+												}
+											}
+										},
+										"staging": {},
+										"compute": {
+											"coreCount": 8,
+											"computeType": "General"
+										},
+										"traceLevel": "Fine"
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "Get Metadata",
+						"type": "GetMetadata",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataset": {
+								"referenceName": "CSVInputFile1",
+								"type": "DatasetReference",
+								"parameters": {
+									"Container": {
+										"value": "@pipeline().parameters.Container",
+										"type": "Expression"
+									},
+									"Folder": {
+										"value": "@pipeline().parameters.SourceFolder",
+										"type": "Expression"
+									},
+									"FileName": {
+										"value": "@pipeline().parameters.FileName",
+										"type": "Expression"
+									}
+								}
+							},
+							"fieldList": [
+								"size"
+							],
+							"storeSettings": {
+								"type": "AzureBlobFSReadSettings",
+								"recursive": true
+							},
+							"formatSettings": {
+								"type": "DelimitedTextReadSettings"
+							}
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {},
+					"cancelAfter": {}
+				},
+				"parameters": {
+					"Container": {
+						"type": "string",
+						"defaultValue": "dynamicsax"
+					},
+					"SourceFolder": {
+						"type": "string"
+					},
+					"FileName": {
+						"type": "string"
+					},
+					"TargetFolder": {
+						"type": "string"
+					},
+					"PartitionSizeMB": {
+						"type": "int",
+						"defaultValue": 200
+					},
+					"EXT": {
+						"type": "string",
+						"defaultValue": ".csv"
+					}
+				},
+				"folder": {
+					"name": "PartitionFile"
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/datasets/CSVInputFile1')]",
+				"[concat(variables('workspaceId'), '/dataflows/PartitionBySize_csv')]",
+				"[concat(variables('workspaceId'), '/dataflows/PartitionBySize_parquet')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/CSVInputFile')]",
+			"type": "Microsoft.Synapse/workspaces/datasets",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "techdeliverydatalaketesting-WorkspaceDefaultStorage",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"Container": {
+						"type": "string"
+					},
+					"Folder": {
+						"type": "string"
+					},
+					"FileName": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "ADLS/DataFlow"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@dataset().FileName",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@dataset().Folder",
+							"type": "Expression"
+						},
+						"fileSystem": {
+							"value": "@dataset().Container",
+							"type": "Expression"
+						}
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\"",
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/linkedServices/techdeliverydatalaketesting-WorkspaceDefaultStorage')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/CSVInputFile1')]",
+			"type": "Microsoft.Synapse/workspaces/datasets",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "techdeliverydatalaketesting-WorkspaceDefaultStorage",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"Container": {
+						"type": "string"
+					},
+					"Folder": {
+						"type": "string"
+					},
+					"FileName": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "ADLS/DataFlow"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@dataset().FileName",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@dataset().Folder",
+							"type": "Expression"
+						},
+						"fileSystem": {
+							"value": "@dataset().Container",
+							"type": "Expression"
+						}
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\"",
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/linkedServices/techdeliverydatalaketesting-WorkspaceDefaultStorage')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/CSVOutputFile')]",
+			"type": "Microsoft.Synapse/workspaces/datasets",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "techdeliverydatalaketesting-WorkspaceDefaultStorage",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"Container": {
+						"type": "string"
+					},
+					"Folder": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "ADLS/DataFlow"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"folderPath": {
+							"value": "@dataset().Folder",
+							"type": "Expression"
+						},
+						"fileSystem": {
+							"value": "@dataset().Container",
+							"type": "Expression"
+						}
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\"",
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/linkedServices/techdeliverydatalaketesting-WorkspaceDefaultStorage')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/CSVOutputFile1')]",
+			"type": "Microsoft.Synapse/workspaces/datasets",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "techdeliverydatalaketesting-WorkspaceDefaultStorage",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"Container": {
+						"type": "string"
+					},
+					"Folder": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "ADLS/DataFlow"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"folderPath": {
+							"value": "@dataset().Folder",
+							"type": "Expression"
+						},
+						"fileSystem": {
+							"value": "@dataset().Container",
+							"type": "Expression"
+						}
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\"",
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/linkedServices/techdeliverydatalaketesting-WorkspaceDefaultStorage')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/ParquetInputFile')]",
+			"type": "Microsoft.Synapse/workspaces/datasets",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "techdeliverydatalaketesting-WorkspaceDefaultStorage",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"Container": {
+						"type": "string"
+					},
+					"Folder": {
+						"type": "string"
+					},
+					"FileName": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "ADLS/DataFlow"
+				},
+				"annotations": [],
+				"type": "Parquet",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@dataset().FileName",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@dataset().Folder",
+							"type": "Expression"
+						},
+						"fileSystem": {
+							"value": "@dataset().Container",
+							"type": "Expression"
+						}
+					},
+					"compressionCodec": "snappy"
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/linkedServices/techdeliverydatalaketesting-WorkspaceDefaultStorage')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/ParquetInputFile1')]",
+			"type": "Microsoft.Synapse/workspaces/datasets",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "techdeliverydatalaketesting-WorkspaceDefaultStorage",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"Container": {
+						"type": "string"
+					},
+					"Folder": {
+						"type": "string"
+					},
+					"FileName": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "ADLS/DataFlow"
+				},
+				"annotations": [],
+				"type": "Parquet",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@dataset().FileName",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@dataset().Folder",
+							"type": "Expression"
+						},
+						"fileSystem": {
+							"value": "@dataset().Container",
+							"type": "Expression"
+						}
+					},
+					"compressionCodec": "snappy"
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/linkedServices/techdeliverydatalaketesting-WorkspaceDefaultStorage')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/ParquetOutputFile')]",
+			"type": "Microsoft.Synapse/workspaces/datasets",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "techdeliverydatalaketesting-WorkspaceDefaultStorage",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"Container": {
+						"type": "string"
+					},
+					"Folder": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "ADLS/DataFlow"
+				},
+				"annotations": [],
+				"type": "Parquet",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"folderPath": {
+							"value": "@dataset().Folder",
+							"type": "Expression"
+						},
+						"fileSystem": {
+							"value": "@dataset().Container",
+							"type": "Expression"
+						}
+					},
+					"compressionCodec": "snappy"
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/linkedServices/techdeliverydatalaketesting-WorkspaceDefaultStorage')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/ParquetOutputFile1')]",
+			"type": "Microsoft.Synapse/workspaces/datasets",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "techdeliverydatalaketesting-WorkspaceDefaultStorage",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"Container": {
+						"type": "string"
+					},
+					"Folder": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "ADLS/DataFlow"
+				},
+				"annotations": [],
+				"type": "Parquet",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"folderPath": {
+							"value": "@dataset().Folder",
+							"type": "Expression"
+						},
+						"fileSystem": {
+							"value": "@dataset().Container",
+							"type": "Expression"
+						}
+					},
+					"compressionCodec": "snappy"
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/linkedServices/techdeliverydatalaketesting-WorkspaceDefaultStorage')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('workspaceName'), '/FnO_TechDeliverySynapse')]",
 			"type": "Microsoft.Synapse/workspaces/linkedServices",
 			"apiVersion": "2019-06-01-preview",
@@ -54,6 +665,21 @@
 			"dependsOn": [
 				"[concat(variables('workspaceId'), '/integrationRuntimes/AutoResolveIntegrationRuntime')]"
 			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/Ziegler')]",
+			"type": "Microsoft.Synapse/workspaces/linkedServices",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"description": "Demo for creating DataFlows in Synapse Studio",
+				"annotations": [],
+				"type": "PowerBIWorkspace",
+				"typeProperties": {
+					"workspaceID": "a0f22374-15dc-4c7d-8d98-e1e13691873a",
+					"tenantID": "2e14a5b1-fbf8-415b-bc7d-93e20829e510"
+				}
+			},
+			"dependsOn": []
 		},
 		{
 			"name": "[concat(parameters('workspaceName'), '/d365techdelivery_CustTable')]",
@@ -143,12 +769,110 @@
 			"dependsOn": []
 		},
 		{
+			"name": "[concat(parameters('workspaceName'), '/PartitionBySize_csv')]",
+			"type": "Microsoft.Synapse/workspaces/dataflows",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "Partition"
+				},
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "CSVInputFile1",
+								"type": "DatasetReference"
+							},
+							"name": "InputFile",
+							"description": "Load Input file"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "CSVOutputFile1",
+								"type": "DatasetReference"
+							},
+							"name": "PartitionFile",
+							"description": "Export data to output file"
+						}
+					],
+					"transformations": [],
+					"script": "parameters{\n\tFileName as string,\n\tPartition as integer\n}\nsource(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false) ~> InputFile\nInputFile sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tfilePattern:(replace($FileName, '.', '[n].')),\n\tumask: 0022,\n\tpreCommands: [],\n\tpostCommands: [],\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true,\n\tpartitionBy('roundRobin', ($Partition))) ~> PartitionFile"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/datasets/CSVInputFile1')]",
+				"[concat(variables('workspaceId'), '/datasets/CSVOutputFile1')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/PartitionBySize_parquet')]",
+			"type": "Microsoft.Synapse/workspaces/dataflows",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "Partition"
+				},
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ParquetInputFile1",
+								"type": "DatasetReference"
+							},
+							"name": "InputFile",
+							"description": "Load Input file"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "ParquetOutputFile1",
+								"type": "DatasetReference"
+							},
+							"name": "PartitionFile",
+							"description": "Export data to output file"
+						}
+					],
+					"transformations": [],
+					"script": "parameters{\n\tFileName as string,\n\tPartition as integer\n}\nsource(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tformat: 'parquet') ~> InputFile\nInputFile sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'parquet',\n\tfilePattern:(replace($FileName, '.', '[n].')),\n\tumask: 0022,\n\tpreCommands: [],\n\tpostCommands: [],\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true,\n\tpartitionBy('roundRobin', ($Partition))) ~> PartitionFile"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/datasets/ParquetInputFile1')]",
+				"[concat(variables('workspaceId'), '/datasets/ParquetOutputFile1')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('workspaceName'), '/WorkspaceSystemIdentity')]",
 			"type": "Microsoft.Synapse/workspaces/credentials",
 			"apiVersion": "2019-06-01-preview",
 			"properties": {
 				"type": "ManagedIdentity",
 				"typeProperties": {}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/Adhoc')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"content": {
+					"query": "use FnO\nGO\n",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "fno",
+						"poolName": "Built-in"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
 			},
 			"dependsOn": []
 		},
@@ -222,7 +946,30 @@
 			"dependsOn": []
 		},
 		{
-			"name": "[concat(parameters('workspaceName'), '/dCompany')]",
+			"name": "[concat(parameters('workspaceName'), '/_getTablesMetaData')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "SynapseAdmin"
+				},
+				"content": {
+					"query": "declare @tableNames varchar(max) = 'GeneralJournalEntry,GeneralJournalAccountEntry,Ledger,DimensionFinancialTag,DimensionAttributeValueCombination,DirPartyTable,OMOperatingUnit,MainAccount,DimensionAttribute,DimensionAttributeDirCategory';\n\nSelect \nX.Table_Name,\nX.Data_Path,\nX.Manifest_Path,\nX.Manifest_Name,\n'NO_PARTITION' as Partition_Strategy,\n'CREATEDDATETIME' as Partition_DateColumn\nfrom (\nSELECT \n'Tables/' + r.filepath(1) + '/'+ r.filepath(2) + '/' + r.filepath(3) + '/'+ r.filepath(4) + '/' + r.filepath(5)  as [Data_Path],\n'Tables/' + r.filepath(1) + '/'+ r.filepath(2) + '/' + r.filepath(3) + '/'+ r.filepath(4)    as [Manifest_Path],\nr.filepath(4)    as [Manifest_Name],\nr.filepath(5) as [Table_Name]\nFROM OPENROWSET(BULK 'Tables/*/*/*/*/*/index.json', FORMAT = 'CSV', fieldterminator ='0x0b',fieldquote = '0x0b'\n, DATA_SOURCE ='dynamics365_financeandoperations_d365techdelivery_dev_sandbox_EDS') \nwith (firstCol nvarchar(1000)) as r group by r.filepath(1) , r.filepath(2), r.filepath(3) , r.filepath(4), r.filepath(5)\nunion \nSELECT \n'Tables/' + r.filepath(1) + '/'+ r.filepath(2) + '/' + r.filepath(3) + '/'+ r.filepath(4)  as [Data_Path],\n'Tables/' + r.filepath(1) + '/'+ r.filepath(2) + '/' + r.filepath(3)     as [Manifest_Path],\nr.filepath(3)    as [Manifest_Name],\nr.filepath(4) as [Table_Name]\nFROM OPENROWSET(BULK 'Tables/*/*/*/*/index.json', FORMAT = 'CSV', fieldterminator ='0x0b',fieldquote = '0x0b'\n, DATA_SOURCE ='dynamics365_financeandoperations_d365techdelivery_dev_sandbox_EDS') \nwith (firstCol nvarchar(1000)) as r group by r.filepath(1) , r.filepath(2), r.filepath(3) , r.filepath(4)\nunion \nSELECT \n'Tables/' + r.filepath(1) + '/'+ r.filepath(2) + '/' + r.filepath(3)   as [Data_Path],\n r.filepath(3) as [Table_Name],\n'Tables/' + r.filepath(1) + '/'+ r.filepath(2)      as [Manifest_Path],\nr.filepath(2)    as [Manifest_Name]\nFROM OPENROWSET(BULK 'Tables/*/*/*/index.json', FORMAT = 'CSV', fieldterminator ='0x0b',fieldquote = '0x0b'\n, DATA_SOURCE ='dynamics365_financeandoperations_d365techdelivery_dev_sandbox_EDS') \nwith (firstCol nvarchar(1000)) as r group by r.filepath(1) , r.filepath(2), r.filepath(3) \n) X \nwhere X.[Table_Name] not in  (select value from string_split(@tableNames, ',') )\nfor  JSON  PATH",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "fno",
+						"poolName": "Built-in"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/dBusinessUnit')]",
 			"type": "Microsoft.Synapse/workspaces/sqlscripts",
 			"apiVersion": "2019-06-01-preview",
 			"properties": {
@@ -230,7 +977,76 @@
 					"name": "VirtualDW"
 				},
 				"content": {
-					"query": "use Fno\nGO\n\n\n-- drop external table dw.dCompany\ncreate external table dw.dCompany with (\n    location = 'DataWarehouse/dCompany'\n   ,data_source = ParquetStorage\n   ,file_format = ParquetFormat\n) as select distinct \n            upper(DataArea) as DataAreaId\n           ,case when DataArea = 'DAT' then 'Do Not Use' else Name end as Name\n       from [raw].[CompanyInfo]\n      order by 1\n\n\nselect * from dw.dCompany",
+					"query": "use FnO\ngo\n\ncreate or alter view raw.vw_dBusinessUnit as \n  select t1.RecId as [Key]\n        ,t1.OMOperatingUnitNumber as BU\n        ,t1.Name as BusinessUnit \n    from raw.DirPartyTable t1 \n   where t1.OMOperatingUnitType = 4 \n     and t1.InstanceRelationType = 8363\ngo\n\n/*\n-- Need to delete the storage in data lake\ndrop external table dw.dBusinessUnit\ngo\n*/\n\ncreate external table dw.dBusinessUnit with (\n    location = 'DataWarehouse/dBusinessUnit'\n   ,data_source = ParquetDataSource\n   ,file_format = ParquetFileFormat\n) as \n    select * from raw.vw_dBusinessUnit\ngo\n\n-- select * from raw.vw_dBusinessUnit\n-- select * from dw.dBusinessUnit",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "fno",
+						"poolName": "Built-in"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/dCompany')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "VirtualDW/InProgress"
+				},
+				"content": {
+					"query": "use FnO\ngo\n\ncreate or alter view raw.vw_dCompany as \nwith distinctCompanies as (\n  select distinct \n         upper(DataArea) as DataAreaId\n        ,case when DataArea = 'DAT' then 'Do Not Use' else Name end as Name\n    from raw.CompanyInfo\n)\nselect cast(row_number() over(order by DataAreaId) as int) AS [Key]\n      ,DataAreaId\n      ,Name\n  from distinctCompanies\ngo\n\n/*\n-- Need to delete the storage in data lake\ndrop external table dw.dCompany\ngo\n*/\n\ncreate external table dw.dCompany with (\n    location = 'DataWarehouse/dCompany'\n   ,data_source = ParquetDataSource\n   ,file_format = ParquetFileFormat\n) as \n    select * from raw.vw_dCompany\n     order by DataAreaId\ngo\n\n\n-- select * from raw.vw_dCompany\n-- select * from dw.dCompany",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "fno",
+						"poolName": "Built-in"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/dCostCenter')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "VirtualDW"
+				},
+				"content": {
+					"query": "use FnO\ngo\n\ncreate or alter view raw.vw_dCostCenter as \n  select t1.RecId as [Key]\n        ,t1.OMOperatingUnitNumber as CC\n        ,t1.Name as CostCenter \n    from raw.DirPartyTable t1 \n   where t1.OMOperatingUnitType = 2 \n     and t1.InstanceRelationType = 8363\ngo\n\n/*\n-- Need to also delete the storage in data lake\ndrop external table dw.dCostCenter\ngo\n*/\n\ncreate external table dw.dCostCenter with (\n    location = 'DataWarehouse/dCostCenter'\n   ,data_source = ParquetDataSource\n   ,file_format = ParquetFileFormat\n) as \n    select * from raw.vw_dCostCenter\ngo\n\n-- select * from raw.vw_dCostCenter\n-- select * from dw.dCostCenter",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "fno",
+						"poolName": "Built-in"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/dCustomer')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "VirtualDW/InProgress"
+				},
+				"content": {
+					"query": "",
 					"metadata": {
 						"language": "sql"
 					},
@@ -253,12 +1069,12 @@
 					"name": "VirtualDW"
 				},
 				"content": {
-					"query": "",
+					"query": "use FnO\ngo\n\ncreate view raw.vw_dDate as \nWITH baseDateTable as (\n    SELECT d as [Date]\n        ,DATEPART(DAY, d) as [Day]\n        ,DATEPART(MONTH, d) as [Month]\n        ,CONVERT(DATE, DATEADD(MONTH, DATEDIFF(MONTH, 0, d), 0)) as [FirstOfMonth]\n        ,DATENAME(MONTH, d) as [MonthName]\n        ,DATEPART(WEEK, d) as [Week]\n        ,DATEPART(ISO_WEEK, d) as [ISOweek]\n        ,DATEPART(WEEKDAY, d) as [DayOfWeek]\n        ,DATEPART(QUARTER, d) as [Quarter]\n        ,DATEPART(YEAR, d) as [Year]\n        ,CONVERT(DATE, DATEADD(YEAR,  DATEDIFF(YEAR,  0, d), 0)) as [FirstOfYear]\n        ,CONVERT(CHAR(8), d, 112) as [Style112]\n        ,CONVERT(CHAR(10), d, 101) as [Style101]\n    FROM\n    (\n        SELECT d = DATEADD(DAY, rn -1, '1/1/2010')\n        FROM \n        (\n            SELECT TOP (DATEDIFF(DAY, '1/1/2010', '12/31/2039')) \n            rn = ROW_NUMBER() OVER(ORDER BY (SELECT NULL)) \n            FROM dw.fGeneralLedger AS s1\n            CROSS JOIN dw.fGeneralLedger AS s2\n        ) AS x\n    ) AS y\n)\nSELECT\n  [Date] as [Key], -- Redundant, for symetrical purposes. May cause confusion, can be removed \n  [Date],\n  CONVERT(INT, Style112) as [DateAsInt],\n  CONVERT(TINYINT, [day]) as [Day],\n  CONVERT(TINYINT, [DayOfWeek]) as [Weekday],\n  CONVERT(VARCHAR(10), DATENAME(WEEKDAY, [Date])) as [WeekDayName],\n  CONVERT(TINYINT, ROW_NUMBER() OVER (PARTITION BY FirstOfMonth, [DayOfWeek] ORDER BY [Date])) as [DOWInMonth],\n  CONVERT(SMALLINT, DATEPART(DAYOFYEAR, [Date])) as [DayOfYear],\n  CONVERT(TINYINT, DENSE_RANK() OVER (PARTITION BY [year], [month] ORDER BY [week])) as [WeekOfMonth],\n  CONVERT(TINYINT, [Week]) as [WeekOfYear],\n  CONVERT(TINYINT, ISOWeek) as [ISOWeekOfYear],\n  CONVERT(TINYINT, [month]) as [Month],\n  CONVERT(VARCHAR(10), [MonthName]) as [MonthName],\n  CONVERT(TINYINT, [Quarter]) as Quarter,\n  CONVERT(VARCHAR(6), CASE [quarter] WHEN 1 THEN 'First' WHEN 2 THEN 'Second' WHEN 3 THEN 'Third' WHEN 4 THEN 'Fourth' END) as [QuarterName], \n  [Year],\n  CONVERT(CHAR(7), CONVERT(varchar(2), [Month]) + '/' + CONVERT(varchar(4), [Year])) as [MMYYYY],\n  CONVERT(CHAR(8), CONVERT(varchar(3),[MonthName]) + ' ' + CONVERT(varchar(4), [Year])) as [MonthYear],\n  [FirstOfMonth],\n  MAX([Date]) OVER (PARTITION BY [year], [month]) as [LastDayOfMonth],\n  MIN([Date]) OVER (PARTITION BY [year], [quarter]) as [FirstDayOfQuarter],\n  MAX([Date]) OVER (PARTITION BY [year], [quarter]) as [LastDayOfQuarter],\n  [FirstOfYear] as [FirstDayOfYear],\n  MAX([Date]) OVER (PARTITION BY [year]) as [LastDayOfYear],\n  DATEADD(MONTH, 1, FirstOfMonth) as [FirstDayOfNextMonth],\n  DATEADD(YEAR,  1, FirstOfYear) as FirstDayOfNextYear\nFROM baseDateTable\n\n/*\n-- Need to delete the storage in data lake\ndrop external table dw.dDate\ngo\n*/\n\nSET DATEFIRST 7;\nSET DATEFORMAT mdy;\n\ncreate external table dw.dDate with (\n    location = 'DataWarehouse/dDate'\n   ,data_source = ParquetDataSource\n   ,file_format = ParquetFileFormat\n) as \n    select * from raw.vw_dDate\ngo\n\n-- select * from raw.vw_dDate\n-- select * from dw.dDate",
 					"metadata": {
 						"language": "sql"
 					},
 					"currentConnection": {
-						"databaseName": "master",
+						"databaseName": "fno",
 						"poolName": "Built-in"
 					},
 					"resultLimit": 5000
@@ -268,7 +1084,7 @@
 			"dependsOn": []
 		},
 		{
-			"name": "[concat(parameters('workspaceName'), '/dInventTrans')]",
+			"name": "[concat(parameters('workspaceName'), '/dDepartment')]",
 			"type": "Microsoft.Synapse/workspaces/sqlscripts",
 			"apiVersion": "2019-06-01-preview",
 			"properties": {
@@ -276,12 +1092,12 @@
 					"name": "VirtualDW"
 				},
 				"content": {
-					"query": "",
+					"query": "use FnO\ngo\n\ncreate or alter view raw.vw_dDepartment as \n  select t1.RecId as [Key]\n        ,t1.OMOperatingUnitNumber as Dept\n        ,t1.Name as Department \n    from raw.DirPartyTable t1 \n   where t1.OMOperatingUnitType = 1 \n     and t1.InstanceRelationType = 8363\ngo\n\n/*\n-- Need to delete the storage in data lake\ndrop external table dw.dDepartment\ngo\n*/\n\ncreate external table dw.dDepartment with (\n    location = 'DataWarehouse/dDepartment'\n   ,data_source = ParquetDataSource\n   ,file_format = ParquetFileFormat\n) as \n    select * from raw.vw_dDepartment\ngo\n\n-- select * from raw.vw_dDepartment\n-- select * from dw.dDepartment",
 					"metadata": {
 						"language": "sql"
 					},
 					"currentConnection": {
-						"databaseName": "master",
+						"databaseName": "fno",
 						"poolName": "Built-in"
 					},
 					"resultLimit": 5000
@@ -296,10 +1112,171 @@
 			"apiVersion": "2019-06-01-preview",
 			"properties": {
 				"folder": {
+					"name": "VirtualDW/InProgress"
+				},
+				"content": {
+					"query": "use FnO\ngo\n\n-- Need to delete the storage in data lake\ndrop external table dw.dInventoryDimension\ngo\n\ncreate external table dw.dInventoryDimension with (\n    location = 'DataWarehouse/dInventoryDimension'\n   ,data_source = ParquetStorage\n   ,file_format = ParquetFormat\n) as \nwith inventoryDimensions as (\n    select InventDimId\n        ,upper(id.DataAreaId) as DataAreaId\n        ,coalesce(s.SiteId, '') as InventSiteId\n        ,coalesce(s.Name, 'Unknown') as SiteName\n        ,coalesce(l.InventLocationId, '') as InventLocationId\n        ,coalesce(l.Name, 'Unknown') as LocationName\n        ,coalesce(l.InventLocationType, -1) as InventLocationType_Enum\n        ,coalesce(case InventLocationType when 0 then 'Standard' when 1 then 'Quarantine' when 2 then 'Transit' else 'Other' end, 'Unknown') as InventLocationType\n        ,coalesce(w.wMSLocationId, '') as wMSLocationId\n    from raw.InventDim id\n        left outer join raw.InventSite s on s.SiteId = id.InventSiteId and s.DataAreaId = id.DataAreaId\n        left outer join raw.WMSLocation w on w.wMSLocationId = id.wMSLocationId and w.DataAreaId = id.DataAreaId\n        left outer join raw.InventLocation l on l.InventLocationId = id.InventLocationId and l.DataAreaId = id.DataAreaId\n)\nselect cast(row_number() over(order by DataAreaId, InventDimId) as int) AS [Key]\n      ,InventDimId\n      ,DataAreaId\n      ,InventSiteId\n      ,SiteName\n      ,InventLocationId\n      ,LocationName\n      ,InventLocationType\n      ,wMSLocationId\n  from inventoryDimensions\n order by 1\ngo\n\nselect * \n  from dw.dInventoryDimension \n where wMSLocationId <> '' InventLocationType = 'Quarantine'\ngo",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "fno",
+						"poolName": "Built-in"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/dItem')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "VirtualDW/InProgress"
+				},
+				"content": {
+					"query": "select top 100 ItemId\n              ,upper(DataAreaId) as DataAreaId\n              ,coalesce(Name , 'Unknown') as Name\n              ,CostCenter, CostCenterValue\n  from raw.InventTable it\n    left outer join raw.EcoResProductTranslation n on n.Product = it.Product and LanguageId = 'EN-US'\n    left outer join raw.DimensionAttributeValueSet d on d.RecId = it.DefaultDimension\n\n\nselect * from raw.DimensionAttributeValueSet d inner join raw.InventTable it on it.DefaultDimension = d.RecId\n\nSELECT T1.DISPLAYVALUE AS DISPLAYVALUE, T1.DIMENSIONATTRIBUTEVALUESET AS DEFAULTDIMENSION, T1.PARTITION AS PARTITION, T1.RECID AS RECID, T2.ENTITYINSTANCE AS ENTITYINSTANCE, T2.PARTITION AS PARTITION#2, T3.REPORTCOLUMNNAME AS REPORTCOLUMNNAME, T3.RECID AS DIMENSIONATTRIBUTEID, T3.BACKINGENTITYTYPE AS BACKINGENTITYTYPE, T3.KEYATTRIBUTE AS KEYATTRIBUTE, T3.NAMEATTRIBUTE AS NAMEATTRIBUTE, T3.NAME AS NAME, T3.PARTITION AS PARTITION#3 \nFROM DIMENSIONATTRIBUTEVALUESETITEM T1 \nCROSS JOIN DIMENSIONATTRIBUTEVALUE T2 \nCROSS JOIN DIMENSIONATTRIBUTE T3 \nWHERE((( T1.DIMENSIONATTRIBUTEVALUE  =  T2.RECID)  AND ( T1.PARTITION  =  T2.PARTITION))  AND (( T2.DIMENSIONATTRIBUTE  =  T3.RECID)  AND ( T2.PARTITION  =  T3.PARTITION)))\n\nselect t.name, c.name \n      from sys.all_columns c \n             inner join \n           sys.tables t \n             on t.object_id = c.object_id \n     where t.name = 'DimensionAttributeValueSet'\n\n\nselect distinct CostCenter, CostCenterValue from raw.DimensionAttributeValueSet\nselect * from raw.DimensionFinancialTag\nselect * from raw.FinancialTagCategory\n\nselect\n    gje.AccountingDate as AccountingDate,\n    gje.DocumentDate as DocumentDate,\n    gje.DocumentNumber as DocumentNumber,\n\tgje.JournalNumber as JournalNumber,\n\tdavc.DisplayValue as LedgerDimension,\n\tgjae.MainAccount as MainAccount_FK,\n    davc.CostCenter as CostCenter_FK,\n    davc.Department as Department_FK,\n    davc.BusinessUnit as BusinessUnit_FK,\n    davc.ItemGroup as ItemGroup_FK,\n\tl.RECID as LegalEntity_FK,\n    gjae.ACCOUNTINGCURRENCYAMOUNT as [Amount(AccountingCurrency)],\n    l.ACCOUNTINGCURRENCY as AccountingCurrency,\n\tgjae.REPORTINGCURRENCYAMOUNT as [Amount(ReportingCurrency)],\n\tl.REPORTINGCURRENCY as ReportingCurrency,\n\tgjae.TransactionCurrencyAmount as [Amount(TransactionCurrency)],\n\tgjae.TransactionCurrencyCode as TransactionCurrency,\n\tgje.SubLedgerVoucher as SubLedgerVoucher\nfrom raw.GeneralJournalAccountEntry gjae\njoin raw.GeneralJournalEntry gje on gjae.GeneralJournalEntry = gje.RECID\njoin raw.Ledger l on gje.Ledger = l.RECID\njoin raw.DimensionAttributeValueCombination davc on gjae.LedgerDimension = davc.RECID",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "fno",
+						"poolName": "Built-in"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/dItemGroup')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
 					"name": "VirtualDW"
 				},
 				"content": {
-					"query": "select * from raw.salesline",
+					"query": "use FnO\ngo\n\ncreate view raw.vw_dItemGroup as \n  select ig.RecId as [Key]\n        ,ig.ItemGroupId\n\t      ,ig.Name as ItemGroup\n    from raw.InventItemGroup ig\ngo\n\n/*\n-- Need to delete the storage in data lake\ndrop external table dw.dItemGroup\ngo\n*/\n\ncreate external table dw.dItemGroup with (\n    location = 'DataWarehouse/dItemGroup'\n   ,data_source = ParquetDataSource\n   ,file_format = ParquetFileFormat\n) as \n    select * from raw.vw_dItemGroup\ngo\n\n-- select * from raw.vw_dItemGroup\n-- select * from dw.dItemGroup",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "fno",
+						"poolName": "Built-in"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/dLegalEntity')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "VirtualDW/InProgress"
+				},
+				"content": {
+					"query": "use FnO\ngo\n\ncreate view raw.vw_dLegalEntity as \n  select l.RecId as [Key]\n        ,upper(dpt.DataArea) as DataAreaId\n        ,dpt.Name as CompanyName   \n    from raw.Ledger l\n         inner join raw.DirPartyTable dpt on l.PrimaryForLegalEntity = dpt.RecId\ngo\n\n/*\n-- Need to delete the storage in data lake\ndrop external table dw.dLegalEntity\ngo\n*/\n\ncreate external table dw.dLegalEntity with (\n    location = 'DataWarehouse/dLegalEntity'\n   ,data_source = ParquetDataSource\n   ,file_format = ParquetFileFormat\n) as \n    select * from raw.vw_dLegalEntity\ngo\n\n-- select * from raw.vw_dLegalEntity\n-- select * from dw.dLegalEntity",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "fno",
+						"poolName": "Built-in"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/dMainAccount')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "VirtualDW"
+				},
+				"content": {
+					"query": "use FnO\ngo\n\ncreate view raw.vw_dMainAccount as \n  select m.RecId as [Key]\n\t      ,m.MainAccountId as MainAccount\n\t      ,m.Name\n\t      ,l.Name as ChartOfAccountName\n    from raw.MainAccount m\n         inner join raw.LedgerChartOfAccounts l on l.RecId = m.LedgerChartOfAccounts\ngo\n\n/*\n-- Need to delete the storage in data lake\ndrop external table dw.dMainAccount\ngo\n*/\n\ncreate external table dw.dMainAccount with (\n    location = 'DataWarehouse/dMainAccount'\n   ,data_source = ParquetDataSource\n   ,file_format = ParquetFileFormat\n) as \n    select * from raw.vw_dMainAccount\ngo\n\n/* Testing\nselect * from raw.MainAccount\nselect * from raw.LedgerChartOfAccounts\nselect * from raw.vw_dMainAccount where ChartOfAccountName = 'Shared'\nselect * from dw.dMainAccount where ChartOfAccountName = 'Shared'\nselect count(*) from dw.dMainAccount\nselect count(*) from dw.dMainAccount where ChartOfAccountName = 'Shared'\n*/",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "fno",
+						"poolName": "Built-in"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/fBacklog')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "VirtualDW/InProgress"
+				},
+				"content": {
+					"query": "select top 200 SalesId, DataAreaId, CostPrice, CustAccount, SalesStatus, SalesType, ItemId, ConfirmedDlv, InventDimId, DefaultDimension, LineNum, LineDisc, LinePercent, LineAmount, DlvMode, DlvTerm, QtyOrdered, RemainInventPhysical\n      ShippingDateRequested, ShippingDateConfirmed, SalesCategory, TaxGroup, TaxItemGroup, CreatedDateTime, ModifiedDateTime, * from raw.SalesLine\n\nuse FnO\ngo\n\n-- Need to delete the storage in data lake\ndrop external table dw.fSalesOrder\ngo\n\ncreate external table dw.fSalesOrder with (\n    location = 'DataWarehouse/fSalesOrder'\n   ,data_source = ParquetStorage\n   ,file_format = ParquetFormat\n) as \nwith inventoryDimensions as (\n    select InventDimId\n        ,upper(id.DataAreaId) as DataAreaId\n        ,coalesce(s.SiteId, '') as InventSiteId\n        ,coalesce(s.Name, 'Unknown') as SiteName\n        ,coalesce(l.InventLocationId, '') as InventLocationId\n        ,coalesce(l.Name, 'Unknown') as LocationName\n        ,coalesce(l.InventLocationType, -1) as InventLocationType_Enum\n        ,coalesce(case InventLocationType when 0 then 'Standard' when 1 then 'Quarantine' when 2 then 'Transit' else 'Other' end, 'Unknown') as InventLocationType\n        ,coalesce(w.wMSLocationId, '') as wMSLocationId\n    from raw.InventDim id\n        left outer join raw.InventSite s on s.SiteId = id.InventSiteId and s.DataAreaId = id.DataAreaId\n        left outer join raw.WMSLocation w on w.wMSLocationId = id.wMSLocationId and w.DataAreaId = id.DataAreaId\n        left outer join raw.InventLocation l on l.InventLocationId = id.InventLocationId and l.DataAreaId = id.DataAreaId\n)\nselect cast(row_number() over(order by DataAreaId, InventDimId) as int) AS [Key]\n      ,InventDimId\n      ,DataAreaId\n      ,InventSiteId\n      ,SiteName\n      ,InventLocationId\n      ,LocationName\n      ,InventLocationType\n      ,wMSLocationId\n  from inventoryDimensions\n order by 1\ngo\n\n",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "fno",
+						"poolName": "Built-in"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/fGeneralLedger')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "VirtualDW"
+				},
+				"content": {
+					"query": "use FnO\ngo\n\ncreate view raw.vw_fGeneralLedger as \n  select gje.AccountingDate as AccountingDate,\n         gje.DocumentDate as DocumentDate,\n         gje.DocumentNumber as DocumentNumber,\n         gje.JournalNumber as JournalNumber,\n         davc.DisplayValue as LedgerDimension,\n         gjae.MainAccount as MainAccount_FK,\n         davc.CostCenter as CostCenter_FK,\n         davc.Department as Department_FK,\n         davc.BusinessUnit as BusinessUnit_FK,\n         davc.ItemGroup as ItemGroup_FK,\n         l.Recid as LegalEntity_FK,\n         gjae.AccountingCurrencyAmount as [Amount(AccountingCurrency)],\n         l.AccountingCurrency as AccountingCurrency,\n         gjae.ReportingCurrencyAmount as [Amount(ReportingCurrency)],\n         l.ReportingCurrency as ReportingCurrency,\n         gjae.TransactionCurrencyAmount as [Amount(TransactionCurrency)],\n         gjae.TransactionCurrencyCode as TransactionCurrency,\n         gje.SubLedgerVoucher as SubLedgerVoucher\n    from raw.GeneralJournalAccountEntry gjae\n         join raw.GeneralJournalEntry gje on gjae.GeneralJournalEntry = gje.RecId\n         join raw.Ledger l on gje.Ledger = l.RecId\n         join raw.DimensionAttributeValueCombination davc on gjae.LedgerDimension = davc.RecId\ngo\n\n/*\n-- Need to delete the storage in data lake\ndrop external table dw.fGeneralLedger\ngo\n*/\n\ncreate external table dw.fGeneralLedger with (\n    location = 'DataWarehouse/fGeneralLedger'\n   ,data_source = ParquetDataSource\n   ,file_format = ParquetFileFormat\n) as \n    select * from raw.vw_fGeneralLedger\ngo\n\n/* Testing\nselect count(*) from raw.vw_fGeneralLedger\nselect count(*) from dw.fGeneralLedger\n\nselect year(AccountingDate) as Year\n      ,count(*) as AccountingEntries\n  from raw.vw_fGeneralLedger -- Using the views\n group by year(AccountingDate)\n order by 1\n\nselect year(AccountingDate) as Year\n      ,count(*) as AccountingEntries\n  from dw.fGeneralLedger\n group by year(AccountingDate)\n order by 1 \n\nselect ma.MainAccount, ma.Name, sum(f.[Amount(AccountingCurrency)]) as Total\n  from dw.fGeneralLedger f \n       inner join dw.dMainAccount ma on ma.[Key] = f.MainAccount_FK\n       inner join dw.dDate d on d.Date = f.AccountingDate\n where ma.ChartOfAccountName = 'Shared'\n   and d.Date = '2016'\n group by ma.MainAccount, ma.Name\n order by 1\n */",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "fno",
+						"poolName": "Built-in"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/fGeneralLedger_BIG')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "SynapseAdmin"
+				},
+				"content": {
+					"query": "-- For demo purposes\ncreate external table dw.fGeneralLedger_BIG with (\n    location = 'DataWarehouse/fGeneralLedger_BIG'\n   ,data_source = ParquetDataSource\n   ,file_format = ParquetFileFormat\n) as \n    select gl.* \n      from dw.fGeneralLedger gl\n           cross join (select top(10000) row_number() over (order by A.[Key]) as N from dw.dMainAccount A cross join dw.dMainAccount B) cj\ngo\n\n-- NOTE: Too big!\n-- select count(*) from dw.fGeneralLedger_BIG\n\nselect count_big(*) \n  from dw.fGeneralLedger_BIG\n\nselect d.[Year]\n      ,cc.CostCenter\n      ,sum(f.[Amount(AccountingCurrency)])\n  from dw.fGeneralLedger_BIG f\n       inner join dw.dCostCenter cc on cc.[Key] = f.CostCenter_FK\n       inner join dw.dDate d on d.[Date] = f.AccountingDate\n where CostCenter in ('Quality Control', 'Administration', 'Super')\n group by cc.CostCenter, d.[Year] \n order by 1\n\n\nselect ma.MainAccount, ma.Name, sum(f.[Amount(AccountingCurrency)]) as Total\n  from dw.fGeneralLedger_BIG f \n       inner join dw.dMainAccount ma on ma.[Key] = f.MainAccount_FK\n       inner join dw.dDate d on d.Date = f.AccountingDate\n where ma.ChartOfAccountName = 'Shared'\n   and d.Date = '2016'\n group by ma.MainAccount, ma.Name\n order by 1\n",
 					"metadata": {
 						"language": "sql"
 					},
@@ -319,33 +1296,10 @@
 			"apiVersion": "2019-06-01-preview",
 			"properties": {
 				"folder": {
-					"name": "VirtualDW"
+					"name": "VirtualDW/InProgress"
 				},
 				"content": {
-					"query": "",
-					"metadata": {
-						"language": "sql"
-					},
-					"currentConnection": {
-						"databaseName": "master",
-						"poolName": "Built-in"
-					},
-					"resultLimit": 5000
-				},
-				"type": "SqlQuery"
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('workspaceName'), '/fSaleOrder')]",
-			"type": "Microsoft.Synapse/workspaces/sqlscripts",
-			"apiVersion": "2019-06-01-preview",
-			"properties": {
-				"folder": {
-					"name": "VirtualDW"
-				},
-				"content": {
-					"query": "",
+					"query": "select top 100 *\n  from raw.CustInvoiceTrans",
 					"metadata": {
 						"language": "sql"
 					},
@@ -365,7 +1319,7 @@
 			"apiVersion": "2019-06-01-preview",
 			"properties": {
 				"folder": {
-					"name": "VirtualDW"
+					"name": "SynapseAdmin"
 				},
 				"content": {
 					"query": "/*\nThis script is given \"As Is\" with no warranties and plenty of caveats. Use at your own risk!\nFor more on data profiling, see Chapter 10 in \"SQL Server 2012 Data Integration Recipes\", Apress, 2012\n*/-----------------------------------------------------------------------\n-- User-defined variables\n-----------------------------------------------------------------------\nUSE fno -- Your database here\nGO\nDECLARE @TABLE_SCHEMA NVARCHAR(128) = 'raw'  -- Your schema here\nDECLARE @TABLE_NAME NVARCHAR(128) = 'InventDim' -- Your table here\nDECLARE @ColumnListIN NVARCHAR(4000) = ''    -- Enter a comma-separated list of specific columns\n                                                     -- to profile, or leave blank for all\nDECLARE @TextCol BIT = 1  -- Analyse all text (char/varchar/nvarchar) data type columns\nDECLARE @NumCol BIT = 1   -- Analyse all numeric data type columns\nDECLARE @DateCol BIT = 1  -- Analyse all date data type data type columns\nDECLARE @LobCol BIT = 1   -- Analyse all VAR(char/nchar/binary) MAX data type columns (potentially time-consuming)\nDECLARE @AdvancedAnalysis BIT = 1 -- Perform advanced analysis (threshold counts/domain analysis) \n                                  --(potentially time-consuming)\nDECLARE @DistinctValuesMinimum INT = 200 -- Minimum number of distinct values to suggest a reference \n                                         -- table and/or perform domain analysis\nDECLARE @BoundaryPercent NUMERIC(3,2) = 0.57 -- Percent of records at upper/lower threshold to suggest\n                                             -- a possible anomaly\nDECLARE @NullBoundaryPercent NUMERIC(5,2) = 90.00 -- Percent of NULLs to suggest a possible anomaly\nDECLARE @DataTypePercentage INT = 2 -- Percentage variance allowed when suggesting another data type \n                                    -- for a column\n-----------------------------------------------------------------------\n-- Process variables\n-----------------------------------------------------------------------\nDECLARE @DATA_TYPE VARCHAR(128) = ''\nDECLARE @FULLSQL VARCHAR(MAX) = ''\nDECLARE @SQLMETADATA VARCHAR(MAX) = ''\nDECLARE @NUMSQL VARCHAR(MAX) = ''\nDECLARE @DATESQL VARCHAR(MAX) = ''\nDECLARE @LOBSQL VARCHAR(MAX) = ''\nDECLARE @COLUMN_NAME VARCHAR(128)\nDECLARE @CHARACTER_MAXIMUM_LENGTH INT\nDECLARE @ROWCOUNT BIGINT = 0\nDECLARE @ColumnList VARCHAR(4000) = ' '\nDECLARE @TableCheck TINYINT\nDECLARE @ColumnCheck SMALLINT\nDECLARE @DataTypeVariance INT\n-----------------------------------------------------------------------\n-- Start the process:\nBEGIN\nTRY\n-- Test that the schema and table exist\nSELECT\n @TableCheck = COUNT (*) \n   FROM INFORMATION_SCHEMA.TABLES \n   WHERE TABLE_SCHEMA = @TABLE_SCHEMA \n   AND TABLE_NAME = @TABLE_NAME\nIF @TableCheck <> 1\n BEGIN\n  RAISERROR ('The table does not exist',16,1)\n  RETURN\n END\n-----------------------------------------------------------------------\n-- Parse list of columns to process / get list of columns according to types required\n-----------------------------------------------------------------------\nIF OBJECT_ID('tempdb..#ColumnList') IS NOT NULL\n DROP TABLE tempdb..#ColumnList;\nCREATE TABLE #ColumnList (COLUMN_NAME VARCHAR(128), DATA_TYPE VARCHAR(128), CHARACTER_MAXIMUM_LENGTH INT) -- Used to hold list of columns to process\nIF @ColumnListIN <> '' -- See if there is a list of columns to process\nBEGIN\n -- Process list\n SET @ColumnList = @ColumnListIN + ','\n DECLARE @CharPosition int\n WHILE CHARINDEX(',', @ColumnList) > 0\n  BEGIN\n   SET @CharPosition = CHARINDEX(',', @ColumnList)\n   INSERT INTO #ColumnList (COLUMN_NAME) VALUES (LTRIM(RTRIM(LEFT(@ColumnList, @CharPosition - 1))))\n   SET @ColumnList = STUFF(@ColumnList, 1, @CharPosition, '')\n  END -- While loop\n-- update with datatype and length\n  UPDATE CL\n   SET CL.CHARACTER_MAXIMUM_LENGTH = ISNULL(ISC.CHARACTER_MAXIMUM_LENGTH,0)\n      ,CL.DATA_TYPE = ISC.DATA_TYPE\n   FROM #ColumnList CL\n   INNER JOIN INFORMATION_SCHEMA.COLUMNS ISC\n     ON CL.COLUMN_NAME = ISC.COLUMN_NAME\n  WHERE ISC.TABLE_NAME = @TABLE_NAME\n  AND ISC.TABLE_SCHEMA = @TABLE_SCHEMA\n END\n-- If test for list of column names\nELSE\n BEGIN\n -- Use all column names, to avoid filtering\n  IF @TextCol = 1\n   BEGIN\n    INSERT INTO #ColumnList (COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH)\n     SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH FROM INFORMATION_SCHEMA.COLUMNS\n     WHERE DATA_TYPE IN ('varchar', 'nvarchar', 'char', 'nchar', 'binary')\n     AND TABLE_NAME = @TABLE_NAME\n     AND TABLE_SCHEMA = @TABLE_SCHEMA\n     AND CHARACTER_MAXIMUM_LENGTH > 0\n   END\n IF @NumCol = 1\n  BEGIN\n   INSERT INTO #ColumnList (COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH)\n   SELECT COLUMN_NAME, DATA_TYPE, ISNULL(CHARACTER_MAXIMUM_LENGTH,0) FROM INFORMATION_SCHEMA.COLUMNS\n   WHERE DATA_TYPE IN ('numeric', 'int', 'bigint', 'tinyint', 'smallint', 'decimal', 'money', 'smallmoney', 'float','real')\n   AND TABLE_NAME = @TABLE_NAME\n   AND TABLE_SCHEMA = @TABLE_SCHEMA\n  END\n IF @DateCol = 1\n  BEGIN\n   INSERT INTO #ColumnList (COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH)\n   SELECT COLUMN_NAME, DATA_TYPE, ISNULL(CHARACTER_MAXIMUM_LENGTH,0) FROM INFORMATION_SCHEMA.COLUMNS\n   WHERE DATA_TYPE IN ('Date', 'DateTime', 'SmallDateTime', 'DateTime2', 'time')\n   AND TABLE_NAME = @TABLE_NAME\n   AND TABLE_SCHEMA = @TABLE_SCHEMA\n  END\nIF @LOBCol = 1\n BEGIN\n  INSERT INTO #ColumnList (COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH)\n   SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH FROM INFORMATION_SCHEMA.COLUMNS\n   WHERE DATA_TYPE IN ('varchar', 'nvarchar', 'varbinary', 'xml')\n   AND TABLE_NAME = @TABLE_NAME\n   AND TABLE_SCHEMA = @TABLE_SCHEMA\n   AND CHARACTER_MAXIMUM_LENGTH = -1\n END\nEND\n-- Else test to get all column names\n-----------------------------------------------------------------------\n-- Test that there are columns to analyse\nSELECT @ColumnCheck = COUNT (*) FROM #ColumnList WHERE DATA_TYPE IS NOT NULL\nIF @ColumnCheck = 0\n BEGIN\n  RAISERROR('The columns do not exist in the selected database or no columns are selected',16,1)\n  RETURN\n END\n-----------------------------------------------------------------------\n-- Create Temp table used to hold profiling data\n-----------------------------------------------------------------------\nIF OBJECT_ID('tempdb..#ProfileData') IS NOT NULL\n DROP TABLE tempdb..#ProfileData;\n CREATE TABLE #ProfileData\n (\n  TABLE_SCHEMA NVARCHAR(128),\n  TABLE_NAME NVARCHAR(128),\n  COLUMN_NAME NVARCHAR(128),\n  ColumnDataLength INT,\n  DataType VARCHAR(128),\n  MinDataLength BIGINT,\n  MaxDataLength BIGINT,\n  AvgDataLength BIGINT,\n  MinDate SQL_VARIANT,\n  MaxDate SQL_VARIANT,\n  NoDistinct BIGINT,\n  NoNulls NUMERIC(32,4),\n  NoZeroLength NUMERIC(32,4),\n  PercentageNulls NUMERIC(9,4),\n  PercentageZeroLength NUMERIC(9,4),\n  NoDateWithHourminuteSecond BIGINT NULL,\n  NoDateWithSecond BIGINT NULL,\n  NoIsNumeric BIGINT NULL,\n  NoIsDate BIGINT NULL,\n  NoAtLimit BIGINT NULL,\n  IsFK BIT NULL DEFAULT 0,\n  DataTypeComments NVARCHAR(1500)\n );\n-- Get row count\nDECLARE @ROWCOUNTTEXT NVARCHAR(1000) = ''\nDECLARE @ROWCOUNTPARAM NVARCHAR(50) = ''\nSET @ROWCOUNTTEXT = 'SELECT @ROWCOUNTOUT = COUNT (*) FROM ' + QUOTENAME(@TABLE_SCHEMA) + '.' + QUOTENAME(@TABLE_NAME) + ' WITH (NOLOCK)'\nSET @ROWCOUNTPARAM = '@ROWCOUNTOUT INT OUTPUT'\nEXECUTE sp_executesql @ROWCOUNTTEXT, @ROWCOUNTPARAM, @ROWCOUNTOUT = @ROWCOUNT OUTPUT\n-----------------------------------------------------------------------\n-- Test that there are records to analyse\nIF @ROWCOUNT = 0\n BEGIN\n  RAISERROR('There is no data in the table to analyse',16,1)\n  RETURN\n END\n-----------------------------------------------------------------------\n-- Define the dynamic SQL used for each column to analyse\n-----------------------------------------------------------------------\nSET @SQLMETADATA = 'INSERT INTO #ProfileData (ColumnDataLength,COLUMN_NAME,TABLE_SCHEMA,TABLE_NAME,DataType,MaxDataLength,MinDataLength,AvgDataLength,MaxDate,MinDate,NoDateWithHourminuteSecond,NoDateWithSecond,NoIsNumeric,NoIsDate,NoNulls,NoZeroLength,NoDistinct)'\nDECLARE SQLMETADATA_CUR CURSOR LOCAL FAST_FORWARD FOR \n SELECT COLUMN_NAME, CHARACTER_MAXIMUM_LENGTH, DATA_TYPE FROM #ColumnList\nOPEN SQLMETADATA_CUR \nFETCH NEXT FROM SQLMETADATA_CUR INTO @COLUMN_NAME, @CHARACTER_MAXIMUM_LENGTH, @DATA_TYPE \nWHILE @@FETCH_STATUS = 0 \n BEGIN \n  SET @SQLMETADATA = @SQLMETADATA +'\n  SELECT TOP 100 PERCENT ' + CAST(@CHARACTER_MAXIMUM_LENGTH AS VARCHAR(20)) + ' ,''' + QUOTENAME(@COLUMN_NAME) + '''\n  ,''' + QUOTENAME(@TABLE_SCHEMA) + '''\n  ,''' + QUOTENAME(@TABLE_NAME) + '''\n  ,''' + @DATA_TYPE + ''''\n   + CASE\n      WHEN @DATA_TYPE IN ('varchar', 'nvarchar', 'char', 'nchar') \n   AND @CHARACTER_MAXIMUM_LENGTH >= 0 \n     THEN + '\n  , MAX(LEN(' + QUOTENAME(@COLUMN_NAME) + ')) \n  , MIN(LEN(' + QUOTENAME(@COLUMN_NAME) + ')) \n  , AVG(LEN(' + QUOTENAME(@COLUMN_NAME) + '))\n  ,NULL\n  ,NULL \n  ,NULL \n  ,NULL \n  ,(SELECT COUNT (*) from '\n   + QUOTENAME(@TABLE_SCHEMA) + '.' + QUOTENAME(@TABLE_NAME) + ' WHERE ISNUMERIC(' + QUOTENAME(@COLUMN_NAME) + ') = 1) \n  ,(SELECT COUNT (*) from ' + QUOTENAME(@TABLE_SCHEMA) + '.' + QUOTENAME(@TABLE_NAME) + ' WHERE ISDATE(' + QUOTENAME(@COLUMN_NAME) + ') = 1) '\n  WHEN @DATA_TYPE IN ('numeric', 'int', 'bigint', 'tinyint', 'smallint', 'decimal', 'money', 'smallmoney', 'float','real') THEN + '\n  ,MAX(' + QUOTENAME(@COLUMN_NAME) + ') \n  ,MIN(' + QUOTENAME(@COLUMN_NAME) + ') \n  ,AVG(CAST(' + QUOTENAME(@COLUMN_NAME) + ' AS NUMERIC(36,2)))\n  ,NULL\n  ,NULL \n  ,NULL \n  ,NULL \n  ,NULL \n  ,NULL '\n   WHEN @DATA_TYPE IN ('DateTime', 'SmallDateTime') THEN + '\n  ,NULL \n  ,NULL \n  ,NULL \n  ,MAX(' + QUOTENAME(@COLUMN_NAME) + ') \n  ,MIN(' + QUOTENAME(@COLUMN_NAME) + ')\n  ,(SELECT COUNT (*) from ' \n   + QUOTENAME(@TABLE_SCHEMA) + '.' + QUOTENAME(@TABLE_NAME) + ' WHERE (CONVERT(NUMERIC(20,12), ' + QUOTENAME(@COLUMN_NAME) + ' ) - FLOOR(CONVERT(NUMERIC(20,12), ' + QUOTENAME(@COLUMN_NAME) + ')) <> 0))\n  ,(SELECT COUNT (*) from '\n   + QUOTENAME(@TABLE_SCHEMA) + '.' + QUOTENAME(@TABLE_NAME) + ' WHERE DATEPART(ss,' + QUOTENAME(@COLUMN_NAME) + ') <> 0 OR DATEPART(mcs,' + QUOTENAME(@COLUMN_NAME) + ') <> 0) \n  ,NULL \n  ,NULL '\n    WHEN @DATA_TYPE IN ('DateTime2') THEN + '\n  ,NULL \n  ,NULL \n  ,NULL \n  ,MAX(' + QUOTENAME(@COLUMN_NAME) + ') \n  ,MIN(' + QUOTENAME(@COLUMN_NAME) + ')\n  ,NULL\n  ,NULL\n  ,NULL \n  ,NULL '\n   WHEN @DATA_TYPE IN ('Date') THEN + '\n  ,NULL \n  ,NULL \n  ,NULL \n  ,MAX('\n   + QUOTENAME(@COLUMN_NAME) + ') \n  ,MIN('\n  + QUOTENAME(@COLUMN_NAME) + ')\n  ,NULL \n  ,NLL \n  ,NULL \n  ,NULL '\n   WHEN @DATA_TYPE IN ('xml') THEN + '\n  ,MAX(LEN(CAST(' + QUOTENAME(@COLUMN_NAME) + ' AS NVARCHAR(MAX)))) \n  ,MIN(LEN(CAST(' + QUOTENAME(@COLUMN_NAME) + ' AS NVARCHAR(MAX)))) \n  ,AVG(LEN(CAST(' + QUOTENAME(@COLUMN_NAME) + ' AS NVARCHAR(MAX)))) \n  ,NULL\n  ,NULL \n  ,NULL \n  ,NULL \n  ,NULL \n  ,NULL '\n  WHEN @DATA_TYPE IN ('varbinary','varchar','nvarchar') AND  @CHARACTER_MAXIMUM_LENGTH = -1 THEN + '\n  ,MAX(LEN(' + QUOTENAME(@COLUMN_NAME) + ')) \n  ,MIN(LEN(' + QUOTENAME(@COLUMN_NAME) + ')) \n  ,AVG(LEN(' + QUOTENAME(@COLUMN_NAME) + '))\n  ,NULL\n  ,NULL \n  ,NULL \n  ,NULL \n  ,NULL \n  ,NULL '\n   WHEN @DATA_TYPE IN ('binary') THEN + '\n  ,MAX(LEN(' + QUOTENAME(@COLUMN_NAME) + ')) \n  ,MIN(LEN(' + QUOTENAME(@COLUMN_NAME) + ')) \n  ,AVG(LEN(' + QUOTENAME(@COLUMN_NAME) + '))\n  ,NULL\n  ,NULL \n  ,NULL \n  ,NULL \n  ,NULL \n  ,NULL '\n   WHEN @DATA_TYPE IN ('time') THEN + '\n  ,NULL \n  ,NULL \n  ,NULL \n  ,MAX(' + QUOTENAME(@COLUMN_NAME) + ') \n  ,MIN(' + QUOTENAME(@COLUMN_NAME) + ')\n  ,NULL \n  ,NULL \n  ,NULL \n  ,NULL '\n   ELSE + '\n  ,NULL \n  ,NULL\n  ,NULL\n  ,NULL\n  ,NULL\n  ,NULL \n  ,NULL \n  ,NULL \n  ,NULL '\n  END + '\n  ,(SELECT COUNT(*) FROM ' + QUOTENAME(@TABLE_SCHEMA) + '.' + QUOTENAME(@TABLE_NAME) + ' WHERE ' + QUOTENAME(@COLUMN_NAME) + ' IS NULL)'\n   + CASE\n   WHEN @DATA_TYPE IN ('varchar', 'nvarchar', 'char', 'nchar') THEN + '\n  ,(SELECT COUNT(*) FROM ' + QUOTENAME(@TABLE_SCHEMA) + '.' + QUOTENAME(@TABLE_NAME) +  ' WHERE LEN(LTRIM(RTRIM(' + QUOTENAME(@COLUMN_NAME) + '))) = '''')'\n   ELSE + '\n  ,NULL'\n   END + '\n  ,(SELECT COUNT(DISTINCT ' + QUOTENAME(@COLUMN_NAME) + ') FROM ' + QUOTENAME(@TABLE_SCHEMA) + '.' + QUOTENAME(@TABLE_NAME) + ' WHERE ' + QUOTENAME(@COLUMN_NAME) + ' IS NOT NULL )\n  FROM ' + QUOTENAME(@TABLE_SCHEMA) + '.' + QUOTENAME(@TABLE_NAME) + ' WITH (NOLOCK)\n  UNION'\n FETCH NEXT FROM SQLMETADATA_CUR INTO @COLUMN_NAME, @CHARACTER_MAXIMUM_LENGTH, @DATA_TYPE \nEND \nCLOSE SQLMETADATA_CUR \nDEALLOCATE SQLMETADATA_CUR \nSET @SQLMETADATA = LEFT(@SQLMETADATA, LEN(@SQLMETADATA) -5)\nEXEC (@SQLMETADATA)\n-----------------------------------------------------------------------\n-- Final Calculations\n-----------------------------------------------------------------------\n-- Indicate Foreign Keys\n; WITH FK_CTE (FKColumnName)\nAS\n(\n SELECT\n   DISTINCT CU.COLUMN_NAME\n  FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS TC\n   INNER JOIN INFORMATION_SCHEMA.CONSTRAINT_COLUMN_USAGE CU\n     ON TC.CONSTRAINT_NAME = CU.CONSTRAINT_NAME \n     AND TC.TABLE_SCHEMA = CU.TABLE_SCHEMA \n     AND TC.TABLE_NAME = CU.TABLE_NAME\n     AND TC.TABLE_SCHEMA = @TABLE_SCHEMA\n     AND TC.TABLE_NAME = @TABLE_NAME\n     AND CONSTRAINT_TYPE = 'FOREIGN KEY'\n)\nUPDATE P\n SET P.IsFK = 1\n FROM #ProfileData P\n  INNER JOIN FK_CTE CTE\n   ON P.COLUMN_NAME = CTE.FKColumnName\n-- Calculate percentages\nUPDATE #ProfileData\n SET PercentageNulls = (NoNulls / @ROWCOUNT) * 100\n    ,PercentageZeroLength = (NoZeroLength / @ROWCOUNT) * 100\n-- Add any comments\n-- Datatype suggestions\n-- First get number of records where a variation could be an anomaly\nSET @DataTypeVariance = ROUND((@ROWCOUNT * @DataTypePercentage) / 100, 0)\nUPDATE #ProfileData\n  SET DataTypeComments = 'Possibly could be one of the DATE types. '\n WHERE NoIsDate BETWEEN (@ROWCOUNT -@DataTypeVariance) AND (@ROWCOUNT + @DataTypeVariance)\n AND DataType IN ('varchar', 'nvarchar', 'char', 'nchar')\nUPDATE #ProfileData\n  SET DataTypeComments = 'Possibly could be one of the NUMERIC types. '\n WHERE NoIsNumeric BETWEEN (@ROWCOUNT -@DataTypeVariance) AND (@ROWCOUNT + @DataTypeVariance)\n AND DataType IN ('varchar', 'nvarchar', 'char', 'nchar')\nUPDATE #ProfileData\n  SET DataTypeComments = 'Possibly could be INT type. '\n WHERE MinDataLength >= -2147483648\n AND MaxDataLength <= 2147483648\n AND DataType IN ('bigint')\n \nUPDATE #ProfileData\n  SET DataTypeComments = 'Possibly could be SMALLINT type. '\n WHERE MinDataLength >= -32768\n AND MaxDataLength <= 32767\n AND DataType IN ('bigint','int')\nUPDATE #ProfileData\n  SET DataTypeComments = 'Possibly could be TINYINT type. '\n WHERE MinDataLength >= 0\n AND MaxDataLength <= 255\n AND DataType IN ('bigint','int','smallint')\nUPDATE #ProfileData\n  SET DataTypeComments = 'Possibly could be SMALLDATE type. '\n WHERE NoDateWithSecond = 0\n AND MinDate >= '19000101'\n AND MaxDate <= '20790606'\n AND DataType IN ('datetime','datetime2')\nUPDATE #ProfileData\n  SET DataTypeComments = 'Possibly could be DATE type (SQL Server 2008 only). '\n WHERE NoDateWithHourminuteSecond = 0\n AND DataType IN ('datetime','datetime2')\nUPDATE #ProfileData\n  SET DataTypeComments = 'Possibly could be DATETIME type. '\n WHERE MinDate >= '17530101'\n AND MaxDate <= '99991231'\n AND DataType IN ('datetime2')\n-- Empty column suggestions\nUPDATE #ProfileData\n  SET DataTypeComments = ISNULL(DataTypeComments,'') + 'Seems empty - is it required? '\n WHERE (PercentageNulls = 100 OR PercentageZeroLength = 100)\n AND IsFK = 0\n-- Null column suggestions\nUPDATE #ProfileData\n  SET DataTypeComments = ISNULL(DataTypeComments,'') + 'There is a large percentage of NULLs - attention may be required. '\n WHERE PercentageNulls >= @NullBoundaryPercent\n-- Distinct value suggestions\nUPDATE #ProfileData\n  SET DataTypeComments = ISNULL(DataTypeComments,'') + 'Few distinct elements - potential for reference/lookup table (contains NULLs).'\n WHERE NoDistinct < @DistinctValuesMinimum\n AND @ROWCOUNT > @DistinctValuesMinimum\n AND IsFK = 0\n AND PercentageNulls <> 100\n AND NoNulls <> 0\n-- FK suggestions\nUPDATE #ProfileData\n  SET DataTypeComments = ISNULL(DataTypeComments,'') + 'Few distinct elements - potential for Foreign Key.'\n WHERE NoDistinct < @DistinctValuesMinimum\n AND @ROWCOUNT > @DistinctValuesMinimum\n AND IsFK = 0\n AND NoNulls = 0\n AND DataType NOT LIKE '%Date%'\n AND DataType <> 'Time'\n-- Filestream suggestions\nUPDATE #ProfileData\n  SET DataTypeComments = 'Possibly a good candidate for FILESTREAM (SQL Server 2008 only).'\n WHERE AvgDataLength >= 1000000\n AND DataType IN ('varbinary')\n AND ColumnDataLength = -1\nUPDATE #ProfileData\n  SET DataTypeComments = 'Possibly not a good candidate for FILESTREAM (SQL Server 2008 only).'\n WHERE AvgDataLength < 1000000\n AND DataType IN ('varbinary')\n AND ColumnDataLength = -1\n-- Sparse Column Suggestions\nIF OBJECT_ID('tempdb..#SparseThresholds') IS NOT NULL\n  DROP TABLE tempdb..#SparseThresholds;\n  CREATE TABLE #SparseThresholds (DataType VARCHAR(128), Threshold NUMERIC(9,4))\n  INSERT INTO #SparseThresholds (DataType, Threshold)\n   VALUES \n    ('tinyint',86),\n    ('smallint',76),    \n    ('int',64),    \n    ('bigint',52),    \n    ('real',64),    \n    ('float',52),    \n    ('money',64),    \n    ('smallmoney',64),    \n    ('smalldatetime',52),    \n    ('datetime',52),    \n    ('uniqueidentifier',43),    \n    ('date',69),    \n    ('datetime2',52),    \n    ('decimal',42),    \n    ('nuumeric',42),    \n    ('char',60),    \n    ('varchar',60),    \n    ('nchar',60),    \n    ('nvarchar',60),    \n    ('binary',60),    \n    ('varbinary',60),    \n    ('xml',60)    \n; WITH Sparse_CTE (COLUMN_NAME, SparseComment)\nAS\n(\nSELECT\n  P.COLUMN_NAME\n ,CASE\n  WHEN P.PercentageNulls >= T.Threshold THEN 'Could benefit from sparse columns. '\n  ELSE ''\n  END AS SparseComment\nFROM #ProfileData P\n INNER JOIN #SparseThresholds T\n  ON P.DataType = T.DataType\n)\nUPDATE PT\n  SET PT.DataTypeComments = \n      CASE WHEN PT.DataTypeComments IS NULL THEN CTE.SparseComment\n           ELSE ISNULL(PT.DataTypeComments,'') + CTE.SparseComment + '. '\n      END\n FROM #ProfileData PT\n  INNER JOIN Sparse_CTE CTE\n   ON PT.COLUMN_NAME = CTE.COLUMN_NAME\n-----------------------------------------------------------------------\n-- Optional advanced analysis\n-----------------------------------------------------------------------\nIF @AdvancedAnalysis = 1\n BEGIN\n-----------------------------------------------------------------------\n-- Data at data boundaries\n-----------------------------------------------------------------------\n  IF OBJECT_ID('tempdb..#LimitTest') IS NOT NULL\n    DROP TABLE tempdb..#LimitTest;\n    CREATE TABLE #LimitTest (COLUMN_NAME VARCHAR(128), NoAtLimit BIGINT);\n    DECLARE @advancedtestSQL VARCHAR(MAX) = 'INSERT INTO #LimitTest (COLUMN_NAME, NoAtLimit)' + CHAR(13)\n    SELECT @advancedtestSQL = @advancedtestSQL + 'SELECT '''+ COLUMN_NAME + ''', COUNT('+ COLUMN_NAME + ') FROM ' + @TABLE_SCHEMA + '.' + @TABLE_NAME + \n     CASE\n       WHEN DataType IN ('numeric', 'int', 'bigint', 'tinyint', 'smallint', 'decimal', 'money', 'smallmoney', 'float','real') THEN ' WHERE '+ COLUMN_NAME + ' = ' + CAST(ISNULL(MaxDataLength,0) AS VARCHAR(40)) + ' OR '+ COLUMN_NAME + ' = ' + CAST(ISNULL(MinDataLength,0) AS VARCHAR(40)) + CHAR(13) + ' UNION' + CHAR(13)\n       ELSE ' WHERE LEN('+ COLUMN_NAME + ') = ' + CAST(ISNULL(MaxDataLength,0) AS VARCHAR(40)) + ' OR LEN('+ COLUMN_NAME + ') = ' + CAST(ISNULL(MinDataLength,0) AS VARCHAR(40)) + CHAR(13) + ' UNION' + CHAR(13)\n     END\n    FROM #ProfileData \n    WHERE DataType IN ('numeric', 'int', 'bigint', 'tinyint', 'smallint', 'decimal', 'money', 'smallmoney', 'float','real','varchar', 'nvarchar', 'char', 'nchar', 'binary')\n    SET @advancedtestSQL = LEFT(@advancedtestSQL,LEN(@advancedtestSQL) -6) \n    EXEC (@advancedtestSQL)\n    UPDATE M\n      SET M.NoAtLimit = T.NoAtLimit\n         ,M.DataTypeComments = \n           CASE\n             WHEN CAST(T.NoAtLimit AS NUMERIC(36,2)) / CAST(@ROWCOUNT AS NUMERIC(36,2)) >= @BoundaryPercent THEN ISNULL(M.DataTypeComments,'') + 'Large numbers of data elements at the max/minvalues. '\n             ELSE M.DataTypeComments\n           END\n    FROM #ProfileData M\n     INNER JOIN #LimitTest T\n      ON M.COLUMN_NAME = T.COLUMN_NAME\n   -----------------------------------------------------------------------\n   -- Domain analysis\n   -----------------------------------------------------------------------\n   IF OBJECT_ID('tempdb..#DomainAnalysis') IS NOT NULL\n     DROP TABLE tempdb..#DomainAnalysis;\n   CREATE TABLE #DomainAnalysis\n   (\n    DomainName NVARCHAR(128)\n   ,DomainElement NVARCHAR(4000)\n   ,DomainCounter BIGINT\n   ,DomainPercent NUMERIC(7,4)\n   );\n   DECLARE @DOMAINSQL VARCHAR(MAX) = 'INSERT INTO #DomainAnalysis (DomainName, DomainElement, DomainCounter) '\n   DECLARE SQLDOMAIN_CUR CURSOR LOCAL FAST_FORWARD FOR \n     SELECT COLUMN_NAME, DataType \n  FROM #ProfileData \n   WHERE NoDistinct < @DistinctValuesMinimum\n   OPEN SQLDOMAIN_CUR \n   FETCH NEXT FROM SQLDOMAIN_CUR INTO @COLUMN_NAME, @DATA_TYPE \n   WHILE @@FETCH_STATUS = 0 \n    BEGIN \n     SET @DOMAINSQL = @DOMAINSQL + 'SELECT ''' + @COLUMN_NAME + ''' AS DomainName, CAST( '+ @COLUMN_NAME + ' AS VARCHAR(4000)) AS DomainElement, COUNT(ISNULL(CAST(' + @COLUMN_NAME + ' AS NVARCHAR(MAX)),'''')) AS DomainCounter FROM ' + @TABLE_SCHEMA + '.' + @TABLE_NAME + ' GROUP BY ' + @COLUMN_NAME + ''\n     + ' UNION '\n     FETCH NEXT FROM SQLDOMAIN_CUR INTO @COLUMN_NAME, @DATA_TYPE \n   END \n  CLOSE SQLDOMAIN_CUR \n  DEALLOCATE SQLDOMAIN_CUR \n  SET @DOMAINSQL = LEFT(@DOMAINSQL, LEN(@DOMAINSQL) -5) + ' ORDER BY DomainName ASC, DomainCounter DESC '\n   EXEC (@DOMAINSQL)\n   -- Now calculate percentages (this appraoch is faster than doing it when performing the domain analysis)\n   ; WITH DomainCounter_CTE (DomainName, DomainCounterTotal)\n   AS\n  (\n   SELECT DomainName, SUM(ISNULL(DomainCounter,0)) AS DomainCounterTotal\n    FROM #DomainAnalysis \n    GROUP BY DomainName\n  )\n  UPDATE D\n    SET D.DomainPercent = (CAST(D.DomainCounter AS NUMERIC(36,4)) / CAST(CTE.DomainCounterTotal AS NUMERIC(36,4))) * 100\n   FROM #DomainAnalysis D\n    INNER JOIN DomainCounter_CTE CTE\n     ON D.DomainName = CTE.DomainName\n   WHERE D.DomainCounter <> 0\n END\n-- Advanced analysis\n-----------------------------------------------------------------------\n-- Output results from the profile and domain data tables\n-----------------------------------------------------------------------\nselect\n   *\n from #ProfileData\nIF @AdvancedAnalysis = 1\n BEGIN\n  select\n    *\n   from #DomainAnalysis\n END\nEND TRY\nBEGIN CATCH\n SELECT\n  ERROR_NUMBER() AS ErrorNumber\n ,ERROR_SEVERITY() AS ErrorSeverity\n ,ERROR_STATE() AS ErrorState\n ,ERROR_PROCEDURE() AS ErrorProcedure\n ,ERROR_LINE() AS ErrorLine\n ,ERROR_MESSAGE() AS ErrorMessage;\n \nEND CATCH",

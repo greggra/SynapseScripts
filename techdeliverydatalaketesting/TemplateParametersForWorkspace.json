@@ -12,7 +12,7 @@
 			"value": ""
 		},
 		"techdeliverydatalaketesting-WorkspaceDefaultSqlServer_connectionString": {
-			"value": ""
+			"value": "Integrated Security=False;Encrypt=True;Connection Timeout=30;Data Source=tcp:techdeliverydatalaketesting.sql.azuresynapse.net,1433;Initial Catalog=@{linkedService().DBName}"
 		},
 		"d365techdelivery_CustTable_properties_typeProperties_url": {
 			"value": "https://d365techdelivery-dev.sandbox.operations.dynamics.com/data"
