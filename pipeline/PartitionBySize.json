@@ -1,0 +1,225 @@
+{
+	"name": "PartitionBySize",
+	"properties": {
+		"activities": [
+			{
+				"name": "CSVOrParquet",
+				"type": "Switch",
+				"dependsOn": [
+					{
+						"activity": "Get Metadata",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"on": {
+						"value": "@toLower(pipeline().parameters.EXT)",
+						"type": "Expression"
+					},
+					"cases": [
+						{
+							"value": ".parquet",
+							"activities": [
+								{
+									"name": "PartitionBySize_parquet",
+									"type": "ExecuteDataFlow",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataflow": {
+											"referenceName": "PartitionBySize_parquet",
+											"type": "DataFlowReference",
+											"parameters": {
+												"FileName": {
+													"value": "'@{pipeline().parameters.FileName}'",
+													"type": "Expression"
+												},
+												"Partition": {
+													"value": "@max(div(activity('Get Metadata').output.Size, mul(pipeline().parameters.PartitionSizeMB,1000000)),1)",
+													"type": "Expression"
+												}
+											},
+											"datasetParameters": {
+												"InputFile": {
+													"Container": {
+														"value": "@pipeline().parameters.Container",
+														"type": "Expression"
+													},
+													"Folder": {
+														"value": "@pipeline().parameters.SourceFolder",
+														"type": "Expression"
+													},
+													"FileName": {
+														"value": "@pipeline().parameters.FileName",
+														"type": "Expression"
+													}
+												},
+												"PartitionFile": {
+													"Container": {
+														"value": "@pipeline().parameters.Container",
+														"type": "Expression"
+													},
+													"Folder": {
+														"value": "@pipeline().parameters.TargetFolder",
+														"type": "Expression"
+													}
+												}
+											}
+										},
+										"compute": {
+											"coreCount": 8,
+											"computeType": "General"
+										},
+										"traceLevel": "Fine"
+									}
+								}
+							]
+						}
+					],
+					"defaultActivities": [
+						{
+							"name": "PartitionBySize",
+							"type": "ExecuteDataFlow",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataflow": {
+									"referenceName": "PartitionBySize_csv",
+									"type": "DataFlowReference",
+									"parameters": {
+										"FileName": {
+											"value": "'@{pipeline().parameters.FileName}'",
+											"type": "Expression"
+										},
+										"Partition": {
+											"value": "@max(div(activity('Get Metadata').output.Size, mul(pipeline().parameters.PartitionSizeMB,1000000)),1)",
+											"type": "Expression"
+										}
+									},
+									"datasetParameters": {
+										"InputFile": {
+											"Container": {
+												"value": "@pipeline().parameters.Container",
+												"type": "Expression"
+											},
+											"Folder": {
+												"value": "@pipeline().parameters.SourceFolder",
+												"type": "Expression"
+											},
+											"FileName": {
+												"value": "@pipeline().parameters.FileName",
+												"type": "Expression"
+											}
+										},
+										"PartitionFile": {
+											"Container": {
+												"value": "@pipeline().parameters.Container",
+												"type": "Expression"
+											},
+											"Folder": {
+												"value": "@pipeline().parameters.TargetFolder",
+												"type": "Expression"
+											}
+										}
+									}
+								},
+								"compute": {
+									"coreCount": 8,
+									"computeType": "General"
+								},
+								"traceLevel": "Fine"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Get Metadata",
+				"type": "GetMetadata",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "CSVInputFile1",
+						"type": "DatasetReference",
+						"parameters": {
+							"Container": {
+								"value": "@pipeline().parameters.Container",
+								"type": "Expression"
+							},
+							"Folder": {
+								"value": "@pipeline().parameters.SourceFolder",
+								"type": "Expression"
+							},
+							"FileName": {
+								"value": "@pipeline().parameters.FileName",
+								"type": "Expression"
+							}
+						}
+					},
+					"fieldList": [
+						"size"
+					],
+					"storeSettings": {
+						"type": "AzureBlobFSReadSettings",
+						"recursive": true
+					},
+					"formatSettings": {
+						"type": "DelimitedTextReadSettings"
+					}
+				}
+			}
+		],
+		"parameters": {
+			"Container": {
+				"type": "string",
+				"defaultValue": "dynamicsax"
+			},
+			"SourceFolder": {
+				"type": "string"
+			},
+			"FileName": {
+				"type": "string"
+			},
+			"TargetFolder": {
+				"type": "string"
+			},
+			"PartitionSizeMB": {
+				"type": "int",
+				"defaultValue": 200
+			},
+			"EXT": {
+				"type": "string",
+				"defaultValue": ".csv"
+			}
+		},
+		"folder": {
+			"name": "PartitionFile"
+		},
+		"annotations": []
+	}
+}

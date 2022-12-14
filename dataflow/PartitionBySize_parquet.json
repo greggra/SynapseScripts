@@ -1,0 +1,33 @@
+{
+	"name": "PartitionBySize_parquet",
+	"properties": {
+		"folder": {
+			"name": "Partition"
+		},
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "ParquetInputFile1",
+						"type": "DatasetReference"
+					},
+					"name": "InputFile",
+					"description": "Load Input file"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "ParquetOutputFile1",
+						"type": "DatasetReference"
+					},
+					"name": "PartitionFile",
+					"description": "Export data to output file"
+				}
+			],
+			"transformations": [],
+			"script": "parameters{\n\tFileName as string,\n\tPartition as integer\n}\nsource(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tformat: 'parquet') ~> InputFile\nInputFile sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'parquet',\n\tfilePattern:(replace($FileName, '.', '[n].')),\n\tumask: 0022,\n\tpreCommands: [],\n\tpostCommands: [],\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true,\n\tpartitionBy('roundRobin', ($Partition))) ~> PartitionFile"
+		}
+	}
+}
