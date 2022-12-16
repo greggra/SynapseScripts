@@ -5,7 +5,7 @@
 			"name": "VirtualDW/InProgress"
 		},
 		"content": {
-			"query": "",
+			"query": "use FnO\ngo\n\ncreate view raw.vw_dCustomer as \n  select ct.RecId as [Key]\n        ,ct.AccountNum as [Account Number]\n        ,dpt.Name as [Customer]\n        -- [Address]\n        ,ct.InvoiceAccount as [Account Number (Invoice)]\n        -- [Invoice Name]\n        -- [Invoice Address]\n        ,ct.PaymTermId as [Payment Terms (Default)]\n        ,ct.CashDisc as [Cash Discount (Default)]\n        ,ct.MaxCredit as [Maximum Credit Limit]\n        ,ct.CreditRating as [Credit Rating]\n        ,ct.Currency as [Currency (Default)]\n        ,ct.CustGroup as [Customer Group Id]\n        ,cg.Name as [Customer Group Name]\n        ,ct.DlvMode as [Delivery Mode (Default)]\n        ,ct.DlvTerm as [Delivery Terms (Default)]\n        ,ct.PaymMode as [Payment Mode (Default)]\n        -- PriceGroup\n        -- SalesDistrictId\n        -- SalesGroup\n        -- SalesPoolId\n        -- SegmentId\n        -- StatisticsGroup\n        -- SubSegmentId\n        -- TaxGroup\n        -- DefaultDimension\n        -- LineOfBusiness\n        -- FirstSalesOrderEntryDate\n        -- LastSalesOrderEntryDate\n    from raw.CustTable ct\n         inner join raw.DirPartyTable dpt on ct.Party = dpt.RecId\n         inner join raw.CustGroup cg on \ngo\n\nselect top 100 * from raw.DirPartyTable\nselect top 1000 * from raw.CustGroup where dataareaid = 'USMF'\nselect top 1000 * from raw.CustTable where dataareaid = 'USMF'",
 			"metadata": {
 				"language": "sql"
 			},
