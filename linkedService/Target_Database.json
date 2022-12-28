@@ -2,17 +2,17 @@
 	"name": "Target_Database",
 	"properties": {
 		"parameters": {
-			"DBServer": {
+			"DbServer": {
 				"type": "string"
 			},
-			"DBName": {
+			"DbName": {
 				"type": "string"
 			}
 		},
 		"annotations": [],
 		"type": "AzureSqlDatabase",
 		"typeProperties": {
-			"connectionString": "Integrated Security=False;Encrypt=True;Connection Timeout=30;Data Source=@{linkedService().DBServer};Initial Catalog=@{linkedService().DBName}"
+			"connectionString": "Integrated Security=False;Encrypt=True;Connection Timeout=30;Data Source=@{linkedService().DbServer};Initial Catalog=@{linkedService().DbName}"
 		},
 		"connectVia": {
 			"referenceName": "AutoResolveIntegrationRuntime",
