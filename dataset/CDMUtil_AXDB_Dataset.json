@@ -1,0 +1,12 @@
+{
+	"name": "CDMUtil_AXDB_Dataset",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "AXDBConnectionString",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": []
+	}
+}

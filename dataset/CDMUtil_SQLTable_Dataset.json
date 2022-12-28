@@ -1,0 +1,30 @@
+{
+	"name": "CDMUtil_SQLTable_Dataset",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "SynapseServerless",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"DBServer": {
+				"type": "string"
+			},
+			"DbName": {
+				"type": "string"
+			},
+			"TableName": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [],
+		"typeProperties": {
+			"schema": "dbo",
+			"table": {
+				"value": "@dataset().TableName",
+				"type": "Expression"
+			}
+		}
+	}
+}
