@@ -654,10 +654,6 @@
 				"type": "string",
 				"defaultValue": "2.0"
 			},
-			"DbServer": {
-				"type": "string",
-				"defaultValue": "techdeliverydatalaketesting-ondemand.sql.azuresynapse.net"
-			},
 			"DbName": {
 				"type": "string",
 				"defaultValue": "fno"
@@ -677,6 +673,10 @@
 			"EntityListForDependency": {
 				"type": "string",
 				"defaultValue": "ReplacemeEntity1,Entity2"
+			},
+			"DbServer": {
+				"type": "string",
+				"defaultValue": "techdeliverydatalaketesting-ondemand.sql.azuresynapse.net"
 			}
 		},
 		"folder": {
