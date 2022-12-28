@@ -45,7 +45,7 @@
 									},
 									"userProperties": [],
 									"linkedServiceName": {
-										"referenceName": "SynapseServerless",
+										"referenceName": "Target_Database",
 										"type": "LinkedServiceReference"
 									},
 									"typeProperties": {
@@ -82,7 +82,7 @@
 									},
 									"userProperties": [],
 									"linkedServiceName": {
-										"referenceName": "SynapseServerless",
+										"referenceName": "Target_Database",
 										"type": "LinkedServiceReference"
 									},
 									"typeProperties": {
@@ -125,7 +125,7 @@
 							},
 							"userProperties": [],
 							"linkedServiceName": {
-								"referenceName": "SynapseServerless",
+								"referenceName": "Target_Database",
 								"type": "LinkedServiceReference"
 							},
 							"typeProperties": {
@@ -156,7 +156,7 @@
 							},
 							"userProperties": [],
 							"linkedServiceName": {
-								"referenceName": "SynapseServerless",
+								"referenceName": "Target_Database",
 								"type": "LinkedServiceReference"
 							},
 							"typeProperties": {

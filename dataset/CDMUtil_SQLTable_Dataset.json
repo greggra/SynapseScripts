@@ -2,7 +2,7 @@
 	"name": "CDMUtil_SQLTable_Dataset",
 	"properties": {
 		"linkedServiceName": {
-			"referenceName": "SynapseServerless",
+			"referenceName": "Target_Database",
 			"type": "LinkedServiceReference"
 		},
 		"parameters": {
