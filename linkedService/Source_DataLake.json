@@ -1,0 +1,19 @@
+{
+	"name": "Source_DataLake",
+	"properties": {
+		"parameters": {
+			"StorageAccount": {
+				"type": "String"
+			}
+		},
+		"annotations": [],
+		"type": "AzureBlobFS",
+		"typeProperties": {
+			"url": "@{linkedService().StorageAccount}"
+		},
+		"connectVia": {
+			"referenceName": "AutoResolveIntegrationRuntime",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}
