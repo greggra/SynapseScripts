@@ -11,8 +11,8 @@
 		"FnO_TechDeliverySynapse_connectionString": {
 			"value": ""
 		},
-		"SynapseServerless_connectionString": {
-			"value": "Integrated Security=False;Encrypt=True;Connection Timeout=30;Data Source=@linkedService().DBServer;Initial Catalog=@linkedSErvice().DBName"
+		"Target_Database_connectionString": {
+			"value": "Integrated Security=False;Encrypt=True;Connection Timeout=30;Data Source=@{linkedService().DbServer};Initial Catalog=@{linkedService().DbName}"
 		},
 		"d365techdelivery_CustTable_password": {
 			"value": ""
