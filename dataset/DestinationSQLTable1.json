@@ -1,0 +1,36 @@
+{
+	"name": "DestinationSQLTable1",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "TargetSQLDB",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"DbServer": {
+				"type": "string"
+			},
+			"DbName": {
+				"type": "string"
+			},
+			"Schema": {
+				"type": "string"
+			},
+			"TableName": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [],
+		"typeProperties": {
+			"schema": {
+				"value": "@dataset().Schema",
+				"type": "Expression"
+			},
+			"table": {
+				"value": "@dataset().TableName",
+				"type": "Expression"
+			}
+		}
+	}
+}

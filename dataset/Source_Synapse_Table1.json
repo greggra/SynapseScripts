@@ -1,0 +1,36 @@
+{
+	"name": "Source_Synapse_Table1",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "SynapseDB",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"DbServer": {
+				"type": "string"
+			},
+			"DbName": {
+				"type": "string"
+			},
+			"Schema": {
+				"type": "string"
+			},
+			"TableName": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [],
+		"typeProperties": {
+			"schema": {
+				"value": "@dataset().Schema",
+				"type": "Expression"
+			},
+			"table": {
+				"value": "@dataset().TableName",
+				"type": "Expression"
+			}
+		}
+	}
+}

@@ -1,0 +1,20 @@
+{
+	"name": "DataLakeToSQL_TargetDB_SQLQuery_Dataset1",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "TargetSQLDB",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"DbServer": {
+				"type": "string"
+			},
+			"DbName": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": []
+	}
+}

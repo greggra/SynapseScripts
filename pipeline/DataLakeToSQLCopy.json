@@ -1,5 +1,5 @@
 {
-	"name": "DataLakeToSQLCopy_old",
+	"name": "DataLakeToSQLCopy",
 	"properties": {
 		"activities": [
 			{
@@ -78,7 +78,7 @@
 							],
 							"typeProperties": {
 								"dataset": {
-									"referenceName": "DataLakeToSQL_CSV_File_Dataset1",
+									"referenceName": "DataLakeToSQL_CSV_File_Dataset11",
 									"type": "DatasetReference",
 									"parameters": {
 										"Container": {
@@ -148,7 +148,7 @@
 										"userProperties": [],
 										"typeProperties": {
 											"dataset": {
-												"referenceName": "DataLakeToSQL_CSV_File_Dataset1",
+												"referenceName": "DataLakeToSQL_CSV_File_Dataset11",
 												"type": "DatasetReference",
 												"parameters": {
 													"Container": {
@@ -220,6 +220,48 @@
 													}
 												],
 												"typeProperties": {
+													"dataflow": {
+														"referenceName": "DataLakeToSQL_CDMToSQL_Dataflows1",
+														"type": "DataFlowReference",
+														"parameters": {
+															"SourceContainer": {
+																"value": "'@{item().SourceContainer}'",
+																"type": "Expression"
+															},
+															"ManifefastName": {
+																"value": "'@{string(last(split(item().metadataLocation, '/')))}'",
+																"type": "Expression"
+															},
+															"TableName": {
+																"value": "'@{item().entityName}'",
+																"type": "Expression"
+															},
+															"FromDateTime": {
+																"value": "toTimestamp(left('@{variables('FromDateTime')}', 19), 'yyyy-MM-dd\\'T\\'HH:mm:ss')",
+																"type": "Expression"
+															},
+															"ToDateTime": {
+																"value": "toTimestamp(left('@{variables('ToDateTime')}', 19), 'yyyy-MM-dd\\'T\\'HH:mm:ss')",
+																"type": "Expression"
+															},
+															"Schema": {
+																"value": "'@{item().schema}'",
+																"type": "Expression"
+															},
+															"DataFiles": {
+																"value": "'@{activity('CheckForNewFiles').output.childItems}'",
+																"type": "Expression"
+															},
+															"Environment": {
+																"value": "'@{item().Environment}'",
+																"type": "Expression"
+															},
+															"ManifestPath": {
+																"value": "'@{item().metadataLocation}'",
+																"type": "Expression"
+															}
+														}
+													},
 													"compute": {
 														"coreCount": 8,
 														"computeType": "General"
@@ -312,7 +354,7 @@
 												},
 												"inputs": [
 													{
-														"referenceName": "Source_Synapse_Table",
+														"referenceName": "Source_Synapse_Table1",
 														"type": "DatasetReference",
 														"parameters": {
 															"DbServer": {
@@ -336,7 +378,7 @@
 												],
 												"outputs": [
 													{
-														"referenceName": "DestinationSQLTable",
+														"referenceName": "DestinationSQLTable1",
 														"type": "DatasetReference",
 														"parameters": {
 															"DbServer": {
@@ -446,6 +488,29 @@
 				},
 				"userProperties": [],
 				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT \n TableSchema as [Schema]\n, StorageAccount\n, TableName as EntityName \n, Container as SourceContainer\n, Environment as Environment\n, case \n\twhen LastCopyDateTime is  Null OR Incremental = 0 \n\t\tThen replace(DataPath, '/*.csv', '')  \n\tElse \n\t\t  concat ('/ChangeFeed/', TableName)\n  end as DataLocation\n, case \n\twhen LastCopyDateTime is  Null or Incremental = 0 \n\t\tThen left(DataPath, len(DataPath) - len(TableName) - 7)  \n\tElse \n\t\t  '/ChangeFeed'\n  end as MetadataLocation\n,LastCopyDateTime\n,LastCopyMarker \nFROM [dbo].[_ControlTableForCopy]\nwhere Active = 1\nand (LastCopyDateTime  is null OR datediff(MINUTE, LastCopyDateTime, GETUTCDATE()) > RefreshInterval) \nand TableSchema = '@{pipeline().parameters.Schema}'\nand ('@{pipeline().parameters.TableNames}' = '*' OR TableName  in (select value from string_split('@{pipeline().parameters.TableNames}', ',')))\n",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "DataLakeToSQL_TargetDB_SQLQuery_Dataset1",
+						"type": "DatasetReference",
+						"parameters": {
+							"DbServer": {
+								"value": "@pipeline().parameters.DbServer",
+								"type": "Expression"
+							},
+							"DbName": {
+								"value": "@pipeline().parameters.DbName",
+								"type": "Expression"
+							}
+						}
+					},
 					"firstRowOnly": false
 				}
 			}
@@ -461,7 +526,7 @@
 			},
 			"DbServer": {
 				"type": "string",
-				"defaultValue": "techdeliverydatalake.database.windows.net.database.windows.netBServer"
+				"defaultValue": "techdeliverydatalake.database.windows.net"
 			},
 			"DbName": {
 				"type": "string",
