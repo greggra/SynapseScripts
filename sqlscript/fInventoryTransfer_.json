@@ -1,0 +1,20 @@
+{
+	"name": "fInventoryTransfer_",
+	"properties": {
+		"folder": {
+			"name": "LCoA"
+		},
+		"content": {
+			"query": "use dynamics365_financeandoperations_d365techdelivery_dev_sandbox\ngo\n\nif (Object_Id('stoneridge.fInventoryTransfer') is not null) \n   drop view stoneridge.fInventoryTransfer\ngo\n\ncreate view stoneridge.fInventoryTransfer as\nselect itt.TransferId as [Transfer Id]\n      ,itl.ItemId as [Item Id]\n      ,itt.InventLocationIdFrom as [From Location]\n      ,itt.InventLocationIdTo as [To Location]\n      ,case itt.TransferStatus when 0 then 'Created'\n                              when 1 then 'Shipped'\n                              when 2 then 'Received'\n                              else 'Unknown'\n       end as [Status]\n      ,itl.CreatedDateTime as [Created DateTime]\n      ,itl.ShipDate as [Ship Date]\n      ,itl.ReceiveDate as [Receive Date]\n      ,itl.QtyTransfer as [Transfer Quantity]\n      ,itl.QtyShipped as [Shipped Quantity]\n      ,itl.QtyRemainShip as [Remaining Ship Quantity]\n      ,itl.QtyReceived as [Received Quantity]\n      ,itl.QtyRemainReceive as [Remaining Receive Quantity]\n  from InventTransferTable itt\n         inner join InventTransferLine itl on itl.TransferId = itt.TransferId and itl.DataAreaId = itt.DataAreaId\n where itt.DataAreaId = 'DUS'\n /* Test\n select count(*) from InventTransferLine where DataAreaId = 'DUS'\n select count(*) from stoneridge.fInventoryTransfer\n select top 100 * from InventTransferLine where DataAreaId = 'DUS'\n select top 100 * from stoneridge.fInventoryTransfer where [Transfer Id] = 'TR-00006121'\n */\n go \n",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "master",
+				"poolName": "Built-in"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}
