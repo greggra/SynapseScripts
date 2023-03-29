@@ -1,0 +1,20 @@
+{
+	"name": "fInvoice_",
+	"properties": {
+		"folder": {
+			"name": "LCoA"
+		},
+		"content": {
+			"query": "use dynamics365_financeandoperations_d365techdelivery_dev_sandbox\ngo\n\nif (Object_Id('stoneridge.fInvoice') is not null) \n   drop view stoneridge.fInvoice\ngo\n\ncreate view stoneridge.fInvoice as\nselect distinct cit.InvoiceId as [Invoice Id] -- 'distinct' can be remove after bug for multiple InvoiceIds fixed\n      ,cit.ItemId as [Item Id]\n      ,cit.SalesId as [Sales Id]\n      ,cit.InvoiceDate as [Invoice Date]\n      ,cit.LineAmountMST as [Invoice Amount]\n      ,cit.Qty as [Invoice Quantity]\n      ,cit.InventTransId\n  from CustInvoiceTrans cit\n         inner join CustInvoiceJour cij on cit.InvoiceId = cij.InvoiceId and cit.DataAreaId = cij.DataAreaId\n where cij.DataAreaId = 'DUS' and cit.InventTransId is not NULL\n /* Test\n select top 100 * from stoneridge.fInvoice\n select [Invoice Id], count(*) as [Count] from stoneridge.fInvoice group by [Invoice Id] order by [Count] desc\n select InvoiceId, count(*) as [Count] from dbo.CustInvoiceJour group by InvoiceId order by [Count] desc\n */",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "master",
+				"poolName": "Built-in"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}
