@@ -1,0 +1,20 @@
+{
+	"name": "fSalesOrder_",
+	"properties": {
+		"folder": {
+			"name": "LCoA"
+		},
+		"content": {
+			"query": "use dynamics365_financeandoperations_d365techdelivery_dev_sandbox\ngo\n\nif (Object_Id('stoneridge.fSalesOrder') is not null) \n   drop view stoneridge.fSalesOrder\ngo\n\ncreate view stoneridge.fSalesOrder as\nselect sl.ItemId as [Item Id]                           -- recommend to hide\n      ,sl.CustAccount as [Customer Account Number]      -- recommend to hide\n      ,sl.DefaultDimension as [Default Dimension RecId] -- recommend to hide\n      ,sl.ConfirmedDlv as [Confirmed Delivery Date]\n      ,sl.CostPrice as [Unit Cost Amount]\n      ,case sl.SalesStatus when 0 then ''\n                        when 1 then 'Open'\n                        when 2 then 'Delivered'\n                        when 3 then 'Invoiced'\n                        when 4 then 'Canceled'\n                        else 'Unknown'\n       end as [Status] \n      ,case sl.DeliveryType when 0 then ''\n                           when 1 then 'Drop Ship'\n                           else 'Unknown'\n       end as [Delivery Type]\n      ,case st.SalesType when 3 then ''\n                        when 4 then 'Return'\n                        else 'Unknown'\n       end as [Sales Type]\n      ,st.SalesOriginId as [Sales Origin]\n      ,sl.SalesQty as [Sales Quantity]\n      ,sl.SalesPrice as [Unit Price]\n      ,sl.LineAmount as [Line Amount]\n      ,sl.InventDimId\n      ,sl.InventTransId\n  from SalesTable st\n         inner join SalesLine sl on sl.SalesId = st.SalesId\n where sl.SalesStatus <> 4 -- Not canceled (All meaningful sales orders)\n   and sl.DataAreaId = 'DUS'\n/* Test\nselect count(*) from stoneridge.fSalesOrder\nselect top 100 * from stoneridge.fSalesOrder\nselect top 100 * from stoneridge.fSalesOrder \n where [Status] = 'Invoiced'\nselect count(*)\n  from stoneridge.fSalesOrder oso \n         inner join stoneridge.dDefaultDimension dd on dd.RecId = oso.[Default Dimension RecId]\n         inner join stoneridge.dItem i on i.[Item Id] = oso.[Item Id]\n         inner join stoneridge.dCustomer c on c.[Account Number] = oso.[Customer Account Number]\nselect top 100 * \n  from stoneridge.fSalesOrder oso \n         inner join stoneridge.dDefaultDimension dd on dd.RecId = oso.[Default Dimension RecId]\n         inner join stoneridge.dItem i on i.[Item Id] = oso.[Item Id]\n         inner join stoneridge.dCustomer c on c.[Account Number] = oso.[Customer Account Number]\n*/\ngo\n\n-- ----------------------------------------------\n-- Open sale orders are a specialization of above\n-- ----------------------------------------------\n\nif (Object_Id('stoneridge.fOpenSalesOrder') is not null) \n   drop view stoneridge.fOpenSalesOrder\ngo\n\ncreate view stoneridge.fOpenSalesOrder as\nselect * \n  from stoneridge.fSalesOrder\n where Status in ('', 'Open', 'Delivered') -- Open sales orders\n/* Test\nselect top 100 * from stoneridge.fOpenSalesOrder\n*/\ngo ",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "master",
+				"poolName": "Built-in"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}
