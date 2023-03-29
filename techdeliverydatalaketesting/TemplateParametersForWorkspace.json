@@ -23,6 +23,15 @@
 		"techdeliverydatalaketesting-WorkspaceDefaultSqlServer_connectionString": {
 			"value": "Integrated Security=False;Encrypt=True;Connection Timeout=30;Data Source=tcp:techdeliverydatalaketesting.sql.azuresynapse.net,1433;Initial Catalog=@{linkedService().DBName}"
 		},
+		"TargetSQLDB_connectionString": {
+			"value": ""
+		},
+		"SourceDataLake_accountKey": {
+			"value": ""
+		},
+		"SynapseDB_connectionString": {
+			"value": ""
+		},
 		"Source_DataLake_properties_typeProperties_url": {
 			"value": "@{linkedService().StorageAccount}"
 		},
@@ -34,6 +43,9 @@
 		},
 		"techdeliverydatalaketesting-WorkspaceDefaultStorage_properties_typeProperties_url": {
 			"value": "https://techdeliverydatalake.dfs.core.windows.net"
+		},
+		"SourceDataLake_properties_typeProperties_url": {
+			"value": "https://techdeliverydatalake.dfs.core.windows.net/"
 		}
 	}
 }
