@@ -754,6 +754,373 @@
 			]
 		},
 		{
+			"name": "[concat(parameters('workspaceName'), '/DataLakeToSQLCopy')]",
+			"type": "Microsoft.Synapse/workspaces/pipelines",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"activities": [
+					{
+						"name": "CopyData",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "GetMetadataDetails",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('GetMetadataDetails').output.value",
+								"type": "Expression"
+							},
+							"isSequential": true,
+							"activities": [
+								{
+									"name": "CheckForNewFiles",
+									"type": "GetMetadata",
+									"dependsOn": [
+										{
+											"activity": "SetFromDateTime",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										},
+										{
+											"activity": "SetToDateTime",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [
+										{
+											"name": "TABLE_NAME",
+											"value": "@item().dataLocation"
+										}
+									],
+									"typeProperties": {
+										"dataset": {
+											"referenceName": "CSVDataFiles",
+											"type": "DatasetReference",
+											"parameters": {
+												"Container": {
+													"value": "@item().SourceContainer",
+													"type": "Expression"
+												},
+												"Folder": {
+													"value": "@concat(item().Environment, '/', item().DataLocation)",
+													"type": "Expression"
+												}
+											}
+										},
+										"fieldList": [
+											"childItems"
+										],
+										"storeSettings": {
+											"type": "AzureBlobFSReadSettings",
+											"recursive": true,
+											"modifiedDatetimeStart": {
+												"value": "@variables('FromDateTime')",
+												"type": "Expression"
+											},
+											"modifiedDatetimeEnd": {
+												"value": "@variables('ToDateTime')",
+												"type": "Expression"
+											},
+											"enablePartitionDiscovery": false
+										},
+										"formatSettings": {
+											"type": "DelimitedTextReadSettings"
+										}
+									}
+								},
+								{
+									"name": "IfNewFiles",
+									"type": "IfCondition",
+									"dependsOn": [
+										{
+											"activity": "CheckForNewFiles",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"expression": {
+											"value": "@greater(length(activity('CheckForNewFiles').output.childItems),1)",
+											"type": "Expression"
+										},
+										"ifTrueActivities": [
+											{
+												"name": "CDMToSQL",
+												"type": "ExecuteDataFlow",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "1.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [
+													{
+														"name": "EntityName",
+														"value": "@item().entityName"
+													}
+												],
+												"typeProperties": {
+													"dataflow": {
+														"referenceName": "CDMToSQL",
+														"type": "DataFlowReference",
+														"parameters": {
+															"SourceContainer": {
+																"value": "'@{item().SourceContainer}'",
+																"type": "Expression"
+															},
+															"ManifestPath": {
+																"value": "'@{item().metadataLocation}'",
+																"type": "Expression"
+															},
+															"ManifefastName": {
+																"value": "'@{string(last(split(item().metadataLocation, '/')))}'",
+																"type": "Expression"
+															},
+															"TableName": {
+																"value": "'@{item().entityName}'",
+																"type": "Expression"
+															},
+															"FromDateTime": {
+																"value": "toTimestamp(left('@{variables('FromDateTime')}', 19), 'yyyy-MM-dd\\'T\\'HH:mm:ss')",
+																"type": "Expression"
+															},
+															"ToDateTime": {
+																"value": "toTimestamp(left('@{variables('ToDateTime')}', 19), 'yyyy-MM-dd\\'T\\'HH:mm:ss')",
+																"type": "Expression"
+															},
+															"Schema": {
+																"value": "'@{item().schema}'",
+																"type": "Expression"
+															},
+															"DataFiles": {
+																"value": "'@{activity('CheckForNewFiles').output.childItems}'",
+																"type": "Expression"
+															},
+															"Environment": {
+																"value": "'@{item().Environment}'",
+																"type": "Expression"
+															}
+														},
+														"datasetParameters": {
+															"SourceCDMTable": {},
+															"SQLSink": {},
+															"FullExportSQL": {}
+														},
+														"linkedServiceParameters": {
+															"SQLSink": {
+																"linkedService": {
+																	"DbName": "d365finance"
+																}
+															},
+															"FullExportSQL": {
+																"linkedService": {
+																	"DbName": "d365finance"
+																}
+															}
+														}
+													},
+													"staging": {},
+													"compute": {
+														"coreCount": 8,
+														"computeType": "General"
+													},
+													"traceLevel": "Fine"
+												}
+											}
+										]
+									}
+								},
+								{
+									"name": "ArchiveChangeFeed",
+									"type": "IfCondition",
+									"dependsOn": [
+										{
+											"activity": "IfNewFiles",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"expression": {
+											"value": "@and(not(equals(item().LastCopyMarker,null)),greater(length(activity('CheckForNewFiles').output.childItems),1))",
+											"type": "Expression"
+										},
+										"ifTrueActivities": [
+											{
+												"name": "DeleteFiles",
+												"type": "Delete",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"dataset": {
+														"referenceName": "CSVDataFiles",
+														"type": "DatasetReference",
+														"parameters": {
+															"Container": {
+																"value": "@item().SourceContainer",
+																"type": "Expression"
+															},
+															"Folder": {
+																"value": "@item().DataLocation",
+																"type": "Expression"
+															}
+														}
+													},
+													"enableLogging": false,
+													"storeSettings": {
+														"type": "AzureBlobFSReadSettings",
+														"recursive": false,
+														"modifiedDatetimeStart": {
+															"value": "@variables('FromDateTime')",
+															"type": "Expression"
+														},
+														"modifiedDatetimeEnd": {
+															"value": "@variables('ToDateTime')",
+															"type": "Expression"
+														},
+														"wildcardFileName": "*.csv",
+														"enablePartitionDiscovery": false
+													}
+												}
+											}
+										]
+									}
+								},
+								{
+									"name": "SetFromDateTime",
+									"type": "SetVariable",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "FromDateTime",
+										"value": {
+											"value": "@item().LastCopyDateTime",
+											"type": "Expression"
+										}
+									}
+								},
+								{
+									"name": "SetToDateTime",
+									"type": "SetVariable",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "ToDateTime",
+										"value": {
+											"value": "@utcnow()",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "GetMetadataDetails",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "SELECT \n TableSchema as [Schema]\n, TableName as EntityName \n, Container as SourceContainer\n, Environment as Environment\n ,case \n\twhen LastCopyDateTime is  Null \n\t\tThen replace(DataPath, '/*.csv', '')  \n\tElse \n\t\t  concat ('/ChangeFeed/', TableName)\nend as DataLocation\n,case \n\twhen LastCopyDateTime is  Null \n\t\tThen replace(replace(DataPath, '/' + TableName, ''),'/*.csv', '')  \n\tElse \n\t\t  '/ChangeFeed'\nend as MetadataLocation\n, LastCopyMarker\n, LastCopyDateTime\nFROM [dbo].[_ControlTableForCopy]\nwhere TableSchema = '@{pipeline().parameters.Schema}'\nand ('@{pipeline().parameters.TableNames}' = '*' OR TableName  in (select value from string_split('@{pipeline().parameters.TableNames}', ',')))",
+									"type": "Expression"
+								},
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "AzureSqlQuery",
+								"type": "DatasetReference",
+								"parameters": {
+									"DbName": {
+										"value": "@pipeline().parameters.DbName",
+										"type": "Expression"
+									}
+								}
+							},
+							"firstRowOnly": false
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {},
+					"cancelAfter": {}
+				},
+				"parameters": {
+					"TableNames": {
+						"type": "string",
+						"defaultValue": "CustGroup"
+					},
+					"Schema": {
+						"type": "string",
+						"defaultValue": "dbo"
+					},
+					"DbName": {
+						"type": "string",
+						"defaultValue": "d365finance"
+					}
+				},
+				"variables": {
+					"FromDateTime": {
+						"type": "string",
+						"defaultValue": "1900-01-01T00:00:00Z"
+					},
+					"ToDateTime": {
+						"type": "string",
+						"defaultValue": "9999-12-31T00:00:00Z"
+					}
+				},
+				"folder": {
+					"name": "4.DataLakeToSQL"
+				},
+				"annotations": [],
+				"lastPublishTime": "2022-09-05T11:05:07Z"
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/datasets/AzureSqlQuery')]",
+				"[concat(variables('workspaceId'), '/datasets/CSVDataFiles')]",
+				"[concat(variables('workspaceId'), '/dataflows/CDMToSQL')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('workspaceName'), '/PartitionBySize')]",
 			"type": "Microsoft.Synapse/workspaces/pipelines",
 			"apiVersion": "2019-06-01-preview",
@@ -992,6 +1359,35 @@
 			]
 		},
 		{
+			"name": "[concat(parameters('workspaceName'), '/AzureSqlQuery')]",
+			"type": "Microsoft.Synapse/workspaces/datasets",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "Target_Database",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"DbName": {
+							"value": "@dataset().DbName",
+							"type": "Expression"
+						}
+					}
+				},
+				"parameters": {
+					"DbName": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [],
+				"typeProperties": {}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/linkedServices/Target_Database')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('workspaceName'), '/CDMUtil_AXDB_Dataset')]",
 			"type": "Microsoft.Synapse/workspaces/datasets",
 			"apiVersion": "2019-06-01-preview",
@@ -1183,7 +1579,7 @@
 			"apiVersion": "2019-06-01-preview",
 			"properties": {
 				"linkedServiceName": {
-					"referenceName": "Source_DataLake",
+					"referenceName": "techdeliverydatalaketesting-WorkspaceDefaultStorage",
 					"type": "LinkedServiceReference"
 				},
 				"parameters": {
@@ -1217,7 +1613,7 @@
 				"schema": []
 			},
 			"dependsOn": [
-				"[concat(variables('workspaceId'), '/linkedServices/Source_DataLake')]"
+				"[concat(variables('workspaceId'), '/linkedServices/techdeliverydatalaketesting-WorkspaceDefaultStorage')]"
 			]
 		},
 		{
@@ -1296,6 +1692,47 @@
 			},
 			"dependsOn": [
 				"[concat(variables('workspaceId'), '/linkedServices/Target_Database')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/CSVDataFiles')]",
+			"type": "Microsoft.Synapse/workspaces/datasets",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "Source_DataLake",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"Container": {
+						"type": "string"
+					},
+					"Folder": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"folderPath": {
+							"value": "@dataset().Folder",
+							"type": "Expression"
+						},
+						"fileSystem": {
+							"value": "@dataset().Container",
+							"type": "Expression"
+						}
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/linkedServices/Source_DataLake')]"
 			]
 		},
 		{
@@ -1862,6 +2299,154 @@
 			"dependsOn": []
 		},
 		{
+			"name": "[concat(parameters('workspaceName'), '/CDMToSQL')]",
+			"type": "Microsoft.Synapse/workspaces/dataflows",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "CDMToSQL"
+				},
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"linkedService": {
+								"referenceName": "Source_DataLake",
+								"type": "LinkedServiceReference"
+							},
+							"name": "SourceCDMTable"
+						}
+					],
+					"sinks": [
+						{
+							"linkedService": {
+								"referenceName": "Target_Database",
+								"type": "LinkedServiceReference"
+							},
+							"name": "SQLSink"
+						},
+						{
+							"linkedService": {
+								"referenceName": "Target_Database",
+								"type": "LinkedServiceReference"
+							},
+							"name": "FullExportSQL"
+						}
+					],
+					"transformations": [
+						{
+							"name": "RemoveColumns"
+						},
+						{
+							"name": "alterRow"
+						},
+						{
+							"name": "IdentifyColumns"
+						},
+						{
+							"name": "RankRowVersion"
+						},
+						{
+							"name": "Deduplicate"
+						},
+						{
+							"name": "split1"
+						}
+					],
+					"scriptLines": [
+						"parameters{",
+						"     SourceContainer as string ('dynamics365-financeandoperations'),",
+						"     ManifestPath as string ('Tables/Finance/AccountsReceivable/Group'),",
+						"     ManifefastName as string ('Group'),",
+						"     TableName as string ('CustGroup'),",
+						"     FromDateTime as timestamp (currentTimestamp()-days(365)),",
+						"     ToDateTime as timestamp (currentTimestamp()),",
+						"     Schema as string ('dbo'),",
+						"     DataFiles as string,",
+						"     Environment as string ('test')",
+						"}",
+						"source(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     inferDriftedColumnTypes: true,",
+						"     ignoreNoFilesFound: true,",
+						"     modifiedAfter: ($FromDateTime),",
+						"     modifiedBefore: ($ToDateTime),",
+						"     entity: ($TableName),",
+						"     format: 'cdm',",
+						"     manifestType: 'manifest',",
+						"     manifestName: ($ManifefastName),",
+						"     entityPath: ($ManifestPath),",
+						"     local: true,",
+						"     folderPath: ($Environment),",
+						"     fileSystem: ($SourceContainer),",
+						"     dateFormats: ['yyyy-MM-dd'],",
+						"     timestampFormats: ['yyyy-MM-dd\\'T\\'HH:mm:ss.SSS\\'Z\\'','yyyy-MM-dd\\'T\\'HH:mm:ss\\'Z\\'','yyyy-MM-dd\\'T\\'HH:mm:ss'],",
+						"     preferredFractionalType: 'float') ~> SourceCDMTable",
+						"Deduplicate select(mapColumn(",
+						"          each(match(name!='_SysRowId'&&name!='LSN'&&name!='Update_Mask'&&name!='Start_LSN'&&name!='End_LSN'&&name!='Seq_Val'))",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> RemoveColumns",
+						"RemoveColumns alterRow(upsertIf(isNull(DML_Action)||DML_Action==\"INSERT\"||DML_Action==\"AFTER_UPDATE\"),",
+						"     deleteIf(DML_Action==\"DELETE\")) ~> alterRow",
+						"SourceCDMTable derive(Start_LSN = toString(byName(\"Start_LSN\")),",
+						"          Seq_Val = toString(byName(\"Seq_Val\")),",
+						"          DataLakeModified_DateTime = toTimestamp(byName(\"DataLakeModified_DateTime\")),",
+						"          RECID = toLong(byName(\"RECID\")),",
+						"          DML_Action = toString(byName(\"DML_Action\")),",
+						"          {_RowVersion} = 0) ~> IdentifyColumns",
+						"split1@IncrementalExport window(over(RECID),",
+						"     desc(Start_LSN, true),",
+						"     desc(Seq_Val, true),",
+						"     desc(DataLakeModified_DateTime, true),",
+						"     desc(DML_Action, true),",
+						"     {_RowVersion} = denseRank()) ~> RankRowVersion",
+						"RankRowVersion filter(toLong(byName(\"_RowVersion\"))==1) ~> Deduplicate",
+						"IdentifyColumns split($ManifefastName == \"ChangeFeed\",",
+						"     disjoint: false) ~> split1@(IncrementalExport, FullExport)",
+						"alterRow sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     format: 'table',",
+						"     store: 'sqlserver',",
+						"     schemaName: ($Schema),",
+						"     tableName: ($TableName),",
+						"     preSQLs:[(concat(\"begin tran; update  [dbo].[_ControlTableForCopy] set LastCopyStatus = 1 where TableSchema = '\",$Schema , \"' and TableName = '\" , $TableName ,\"' commit tran;\"))],",
+						"     insertable: true,",
+						"     updateable: true,",
+						"     deletable: true,",
+						"     upsertable: true,",
+						"     keys:['RECID'],",
+						"     postSQLs:[(concat(\"begin tran; declare @ChildItems nvarchar(max)='\", $DataFiles,\"'; declare @ToDateTime DateTime='\", toString($ToDateTime),\"'; declare @LastFileName nvarchar(200) = (select max(name) from Openjson(@ChildItems) with (name nvarchar(100) '$.name') where name != 'index.json');  update  [dbo].[_ControlTableForCopy] set LastCopyDateTime =@ToDateTime, LastCopyMarker = @LastFileName, LastCopyStatus = 0 where TableSchema = '\",$Schema , \"' and TableName = '\" , $TableName ,\"' commit tran;\"))],",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true,",
+						"     errorHandlingOption: 'stopOnFirstError',",
+						"     preCommands: [],",
+						"     postCommands: []) ~> SQLSink",
+						"split1@FullExport sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     format: 'table',",
+						"     store: 'sqlserver',",
+						"     schemaName: ($Schema),",
+						"     tableName: ($TableName),",
+						"     preSQLs:[(concat(\"begin tran; update  [dbo].[_ControlTableForCopy] set LastCopyStatus = 1 where TableSchema = '\",$Schema , \"' and TableName = '\" , $TableName ,\"' commit tran;\"))],",
+						"     insertable: true,",
+						"     updateable: false,",
+						"     deletable: false,",
+						"     upsertable: false,",
+						"     truncate: true,",
+						"     postSQLs:[(concat(\"begin tran; declare @ChildItems nvarchar(max)='\", $DataFiles,\"'; declare @ToDateTime DateTime='\", toString($ToDateTime),\"'; declare @LastFileName nvarchar(200) = (select max(name) from Openjson(@ChildItems) with (name nvarchar(100) '$.name') where name != 'index.json');  update  [dbo].[_ControlTableForCopy] set LastCopyDateTime =@ToDateTime, LastCopyMarker = @LastFileName, LastCopyStatus = 0 where TableSchema = '\",$Schema , \"' and TableName = '\" , $TableName ,\"' commit tran;\"))],",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true,",
+						"     errorHandlingOption: 'stopOnFirstError') ~> FullExportSQL"
+					]
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/linkedServices/Source_DataLake')]",
+				"[concat(variables('workspaceId'), '/linkedServices/Target_Database')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('workspaceName'), '/PartitionBySize_csv')]",
 			"type": "Microsoft.Synapse/workspaces/dataflows",
 			"apiVersion": "2019-06-01-preview",
@@ -2162,7 +2747,7 @@
 					"name": "VirtualDW"
 				},
 				"content": {
-					"query": "use FnO\ngo\n\ncreate view raw.vw_dDate as \nWITH baseDateTable as (\n    SELECT d as [Date]\n        ,DATEPART(DAY, d) as [Day]\n        ,DATEPART(MONTH, d) as [Month]\n        ,CONVERT(DATE, DATEADD(MONTH, DATEDIFF(MONTH, 0, d), 0)) as [FirstOfMonth]\n        ,DATENAME(MONTH, d) as [MonthName]\n        ,DATEPART(WEEK, d) as [Week]\n        ,DATEPART(ISO_WEEK, d) as [ISOweek]\n        ,DATEPART(WEEKDAY, d) as [DayOfWeek]\n        ,DATEPART(QUARTER, d) as [Quarter]\n        ,DATEPART(YEAR, d) as [Year]\n        ,CONVERT(DATE, DATEADD(YEAR,  DATEDIFF(YEAR,  0, d), 0)) as [FirstOfYear]\n        ,CONVERT(CHAR(8), d, 112) as [Style112]\n        ,CONVERT(CHAR(10), d, 101) as [Style101]\n    FROM\n    (\n        SELECT d = DATEADD(DAY, rn -1, '1/1/2010')\n        FROM \n        (\n            SELECT TOP (DATEDIFF(DAY, '1/1/2010', '12/31/2039')) \n            rn = ROW_NUMBER() OVER(ORDER BY (SELECT NULL)) \n            FROM dw.fGeneralLedger AS s1\n            CROSS JOIN dw.fGeneralLedger AS s2\n        ) AS x\n    ) AS y\n)\nSELECT\n  [Date] as [Key], -- Redundant, for symetrical purposes. May cause confusion, can be removed \n  [Date],\n  CONVERT(INT, Style112) as [DateAsInt],\n  CONVERT(TINYINT, [day]) as [Day],\n  CONVERT(TINYINT, [DayOfWeek]) as [Weekday],\n  CONVERT(VARCHAR(10), DATENAME(WEEKDAY, [Date])) as [WeekDayName],\n  CONVERT(TINYINT, ROW_NUMBER() OVER (PARTITION BY FirstOfMonth, [DayOfWeek] ORDER BY [Date])) as [DOWInMonth],\n  CONVERT(SMALLINT, DATEPART(DAYOFYEAR, [Date])) as [DayOfYear],\n  CONVERT(TINYINT, DENSE_RANK() OVER (PARTITION BY [year], [month] ORDER BY [week])) as [WeekOfMonth],\n  CONVERT(TINYINT, [Week]) as [WeekOfYear],\n  CONVERT(TINYINT, ISOWeek) as [ISOWeekOfYear],\n  CONVERT(TINYINT, [month]) as [Month],\n  CONVERT(VARCHAR(10), [MonthName]) as [MonthName],\n  CONVERT(TINYINT, [Quarter]) as Quarter,\n  CONVERT(VARCHAR(6), CASE [quarter] WHEN 1 THEN 'First' WHEN 2 THEN 'Second' WHEN 3 THEN 'Third' WHEN 4 THEN 'Fourth' END) as [QuarterName], \n  [Year],\n  CONVERT(CHAR(7), CONVERT(varchar(2), [Month]) + '/' + CONVERT(varchar(4), [Year])) as [MMYYYY],\n  CONVERT(CHAR(8), CONVERT(varchar(3),[MonthName]) + ' ' + CONVERT(varchar(4), [Year])) as [MonthYear],\n  [FirstOfMonth],\n  MAX([Date]) OVER (PARTITION BY [year], [month]) as [LastDayOfMonth],\n  MIN([Date]) OVER (PARTITION BY [year], [quarter]) as [FirstDayOfQuarter],\n  MAX([Date]) OVER (PARTITION BY [year], [quarter]) as [LastDayOfQuarter],\n  [FirstOfYear] as [FirstDayOfYear],\n  MAX([Date]) OVER (PARTITION BY [year]) as [LastDayOfYear],\n  DATEADD(MONTH, 1, FirstOfMonth) as [FirstDayOfNextMonth],\n  DATEADD(YEAR,  1, FirstOfYear) as FirstDayOfNextYear\nFROM baseDateTable\n\n/*\n-- Need to delete the storage in data lake\ndrop external table dw.dDate\ngo\n*/\n\nSET DATEFIRST 7;\nSET DATEFORMAT mdy;\n\ncreate external table dw.dDate with (\n    location = 'DataWarehouse/dDate'\n   ,data_source = ParquetDataSource\n   ,file_format = ParquetFileFormat\n) as \n    select * from raw.vw_dDate\ngo\n\n-- select * from raw.vw_dDate\n-- select * from dw.dDate",
+					"query": "use FnO\ngo\n\ncreate view raw.vw_dDate as \nWITH baseDateTable as (\n    SELECT d as [Date]\n        ,DATEPART(DAY, d) as [Day]\n        ,DATEPART(MONTH, d) as [Month]\n        ,CONVERT(DATE, DATEADD(MONTH, DATEDIFF(MONTH, 0, d), 0)) as [FirstOfMonth]\n        ,DATENAME(MONTH, d) as [MonthName]\n        ,DATEPART(WEEK, d) as [Week]\n        ,DATEPART(ISO_WEEK, d) as [ISOweek]\n        ,DATEPART(WEEKDAY, d) as [DayOfWeek]\n        ,DATEPART(QUARTER, d) as [Quarter]\n        ,DATEPART(YEAR, d) as [Year]\n        ,CONVERT(DATE, DATEADD(YEAR,  DATEDIFF(YEAR,  0, d), 0)) as [FirstOfYear]\n        ,CONVERT(CHAR(8), d, 112) as [Style112]\n        ,CONVERT(CHAR(10), d, 101) as [Style101]\n    FROM\n    (\n        SELECT d = DATEADD(DAY, rn -1, '1/1/2010')\n        FROM \n        (\n            SELECT TOP (DATEDIFF(DAY, '1/1/2010', '12/31/2039')) \n            rn = ROW_NUMBER() OVER(ORDER BY (SELECT NULL)) \n            FROM dw.fGeneralLedger AS s1\n            CROSS JOIN dw.fGeneralLedger AS s2\n        ) AS x\n    ) AS y\n)\nSELECT\n  [Date] as [Key], -- Redundant, for symetrical purposes. May cause confusion, can be removed \n  [Date],\n  CONVERT(INT, Style112) as [DateAsInt],\n  CONVERT(TINYINT, [day]) as [Day],\n  CONVERT(TINYINT, [DayOfWeek]) as [Weekday],\n  CONVERT(VARCHAR(10), DATENAME(WEEKDAY, [Date])) as [WeekDayName],\n  CONVERT(TINYINT, ROW_NUMBER() OVER (PARTITION BY FirstOfMonth, [DayOfWeek] ORDER BY [Date])) as [DOWInMonth],\n  CONVERT(SMALLINT, DATEPART(DAYOFYEAR, [Date])) as [DayOfYear],\n  CONVERT(TINYINT, DENSE_RANK() OVER (PARTITION BY [year], [month] ORDER BY [week])) as [WeekOfMonth],\n  CONVERT(TINYINT, [Week]) as [WeekOfYear],\n  CONVERT(TINYINT, ISOWeek) as [ISOWeekOfYear],\n  CONVERT(TINYINT, [month]) as [Month],\n  CONVERT(VARCHAR(10), [MonthName]) as [MonthName],\n  CONVERT(TINYINT, [Quarter]) as Quarter,\n  CONVERT(VARCHAR(6), CASE [quarter] WHEN 1 THEN 'First' WHEN 2 THEN 'Second' WHEN 3 THEN 'Third' WHEN 4 THEN 'Fourth' END) as [QuarterName], \n  [Year],\n  CONVERT(CHAR(7), CONVERT(varchar(2), [Month]) + '/' + CONVERT(varchar(4), [Year])) as [MMYYYY],\n  CONVERT(CHAR(8), CONVERT(varchar(3),[MonthName]) + ' ' + CONVERT(varchar(4), [Year])) as [MonthYear],\n  [FirstOfMonth],\n  MAX([Date]) OVER (PARTITION BY [year], [month]) as [LastDayOfMonth],\n  MIN([Date]) OVER (PARTITION BY [year], [quarter]) as [FirstDayOfQuarter],\n  MAX([Date]) OVER (PARTITION BY [year], [quarter]) as [LastDayOfQuarter],\n  [FirstOfYear] as [FirstDayOfYear],\n  MAX([Date]) OVER (PARTITION BY [year]) as [LastDayOfYear],\n  DATEADD(MONTH, 1, FirstOfMonth) as [FirstDayOfNextMonth],\n  DATEADD(YEAR,  1, FirstOfYear) as FirstDayOfNextYear\nFROM baseDateTable\n\n/*\n-- Need to delete the storage in data lake\ndrop external table dw.dDate\ngo\n\n*/\n\nSET DATEFIRST 7;\nSET DATEFORMAT mdy;\n\ncreate external table dw.dDate with (\n    location = 'DataWarehouse/dDate'\n   ,data_source = ParquetDataSource\n   ,file_format = ParquetFileFormat\n) as \n    select * from raw.vw_dDate\ngo\n\n-- select * from raw.vw_dDate\n-- select * from dw.dDate",
 					"metadata": {
 						"language": "sql"
 					},
