@@ -83,7 +83,17 @@
 									"userProperties": [],
 									"linkedServiceName": {
 										"referenceName": "Target_Database",
-										"type": "LinkedServiceReference"
+										"type": "LinkedServiceReference",
+										"parameters": {
+											"DbServer": {
+												"value": "@pipeline().parameters.DbServer",
+												"type": "Expression"
+											},
+											"DbName": {
+												"value": "@pipeline().parameters.DbName",
+												"type": "Expression"
+											}
+										}
 									},
 									"typeProperties": {
 										"scripts": [
@@ -648,7 +658,7 @@
 			},
 			"DDLType": {
 				"type": "string",
-				"defaultValue": "SynapseView"
+				"defaultValue": "SQLTable"
 			},
 			"ParserVersion": {
 				"type": "string",
@@ -656,7 +666,7 @@
 			},
 			"DbName": {
 				"type": "string",
-				"defaultValue": "fno"
+				"defaultValue": "pipeline-target"
 			},
 			"Schema": {
 				"type": "string",
@@ -676,7 +686,7 @@
 			},
 			"DbServer": {
 				"type": "string",
-				"defaultValue": "techdeliverydatalaketesting-ondemand.sql.azuresynapse.net"
+				"defaultValue": "techdeliverydatalake.database.windows.net"
 			}
 		},
 		"folder": {
