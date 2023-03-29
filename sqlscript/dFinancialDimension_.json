@@ -1,0 +1,20 @@
+{
+	"name": "dFinancialDimension_",
+	"properties": {
+		"folder": {
+			"name": "LCoA"
+		},
+		"content": {
+			"query": "use dynamics365_financeandoperations_d365techdelivery_dev_sandbox\ngo\n\nif (Object_Id('stoneridge.dFinancialDimension') is not null) \n   drop view stoneridge.dFinancialDimension\ngo\n\ncreate view stoneridge.[dFinancialDimension] as\n  select davc.RecId\n        ,case davc.LedgerDimensionType when 0 then 'Account'\n                                       when 1 then 'Default Account'\n                                       when 2 then 'Budget'\n                                       when 3 then 'Budget Control'\n                                       when 4 then 'Budget Planning'\n                                       else 'Unknown'\n         end as [Ledger Dimension Type]                                       \n        ,m.MainAccountId as [Main Account Number]\n        ,m.Name as [Main Account]\n        ,case m.Type when 0 then ''\n                     when 1 then 'Profit and Loss'\n                     when 2 then 'Revenue'\n                     when 3 then 'Expense'\n                     when 4 then 'Balance Sheet'\n                     when 5 then 'Asset'\n                     when 6 then 'Liability'\n                     when 7 then 'Equity'\n                     when 8 then 'Total'\n                     when 9 then 'Reporting'\n                     else 'Unknown' end as [Main Account Type]\n        ,davc.DisplayValue as [Display]\n        ,davc.CostCenterValue as [Cost Center]\n        ,davc.CustomerTypeValue as [Customer Type]\n        ,davc.FinancialProductCategoryValue as [Financial Product Category Code]\n        ,dft.Description as [Financial Product Category]\n        ,davc.LegalEntityValue as [Legal Entity]\n        ,davc.LocationValue as [Location]\n        ,davc.SalesChannelValue as [Sales Channel]\n        ,davc.SalesPersonValue as [Sales Person]\n        ,davc.CustomerGroupValue as [Customer Group]\n    from DimensionAttributeValueCombination davc\n           left outer join DimensionFinancialTag dft on dft.Value = davc.FinancialProductCategoryValue \n           left outer join MainAccount m on m.RecId = davc.MainAccount\n\n/* Testing\nselect top 100 * from stoneridge.dFinancialDimension\nselect top 100 * from DimensionAttributeValueCombination\nselect top 100 * from stoneridge.dFinancialDimension where [Sales Channel] is not null\nselect 'DimensionAttributeValueCombination', count(*) from DimensionAttributeValueCombination\nselect 'stoneridge.dFinancialDimension', count(*) from stoneridge.dFinancialDimension\nselect [Ledger Dimension Type], count(*) from stoneridge.dFinancialDimension group by [Ledger Dimension Type]\n\n// To expand the Sale Person attribute...\nselect * from DimensionFinancialTag where FinancialTagCategory = '5637144583'\n*/\ngo",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "master",
+				"poolName": "Built-in"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

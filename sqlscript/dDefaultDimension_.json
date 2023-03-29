@@ -1,0 +1,20 @@
+{
+	"name": "dDefaultDimension_",
+	"properties": {
+		"folder": {
+			"name": "LCoA"
+		},
+		"content": {
+			"query": "use dynamics365_financeandoperations_d365techdelivery_dev_sandbox\ngo\n\nif (Object_Id('stoneridge.dDefaultDimension') is not null) \n   drop view stoneridge.dDefaultDimension\ngo\n\ncreate view [stoneridge].[dDefaultDimension] as\n  select davs.RecId\n        ,davs.CostCenterValue as [Cost Center]\n        ,davs.CustomerTypeValue as [Customer Type]\n        ,davs.FinancialProductCategoryValue as [Financial Product Category Code]\n        ,dft.Description as [Financial Product Category]\n        ,davs.LegalEntityValue as [Legal Entity]\n        ,davs.LocationValue as [Location]\n        ,davs.SalesChannelValue as [Sales Channel]\n        ,davs.SalesPersonValue as [Sales Person]\n        ,davs.CustomerGroupValue as [Customer Group]\n    from DimensionAttributeValueSet davs\n           left outer join DimensionFinancialTag dft on dft.Value = davs.FinancialProductCategoryValue \n/* Testing\nselect top 100 * from DimensionAttributeValueSet\nselect top 100 * from stoneridge.dDefaultDimension\nselect top 100 * from stoneridge.dDefaultDimension where [Sales Channel] is not null\nselect 'DimensionAttributeValueSet', count(*) from DimensionAttributeValueSet\nselect 'stoneridge.dDefaultDimension', count(*) from stoneridge.dDefaultDimension\n*/\nGO",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "master",
+				"poolName": "Built-in"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

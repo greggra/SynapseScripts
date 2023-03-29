@@ -1,0 +1,20 @@
+{
+	"name": "dInventoryDimension_",
+	"properties": {
+		"folder": {
+			"name": "LCoA"
+		},
+		"content": {
+			"query": "use dynamics365_financeandoperations_d365techdelivery_dev_sandbox\ngo\n\nif (Object_Id('stoneridge.dInventoryDimension') is not null) \n   drop view stoneridge.dInventoryDimension\ngo\n\ncreate view stoneridge.dInventoryDimension as\nselect InventDimId\n      ,InventBatchId as [Batch Id]\n      ,InventStatusId as [Inventory Status]\n      ,InventSiteId as [Site]\n      ,InventLocationId as [Warehouse]\n      ,wmsLocationId as [Warehouse Location]\n      ,DataAreaId\n  from InventDim\n/* Test\nselect top 100 * from InventDim where \nselect count(*) from InventDim\nselect count(*) from stoneridge.dInventoryDimension\n*/\ngo\n",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "master",
+				"poolName": "Built-in"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}
