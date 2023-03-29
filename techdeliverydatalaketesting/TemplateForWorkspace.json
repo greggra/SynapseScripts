@@ -3007,6 +3007,52 @@
 			"dependsOn": []
 		},
 		{
+			"name": "[concat(parameters('workspaceName'), '/dCustomerItem_')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "LCoA"
+				},
+				"content": {
+					"query": "use dynamics365_financeandoperations_d365techdelivery_dev_sandbox\ngo\n\nif (Object_Id('stoneridge.dCustomerItem') is not null) \n   drop view stoneridge.dCustomerItem\ngo\n\ncreate view stoneridge.dCustomerItem as\n  select cvei.CustVendRelation as [Account Number]\n        ,cvei.ItemId as [Item Id]\n        ,cvei.ExternalItemId as [External Item Id]\n        ,cvei.DataAreaId -- optional, comment out if only one company\n    from CustVendExternalItem cvei\n   where cvei.ModuleType = 4 -- ModuleInventPurchSalesVendCustGroup::Cust\n/* Test\nselect top 100 * from stoneridge.dCustomerItem\nselect 'stoneridge.dCustomerItem', count(*) as NumberOfRows from stoneridge.dCustomerItem union\nselect 'CustVendExternalItem', count(*) from CustVendExternalItem where ModuleType = 4\n*/\ngo\n\n\nselect AccountCode, count(*) from PriceDiscTable group by AccountCode\nselect top 100 * from PriceDiscTable where AccountCode = 0 -- PriceDiscPartyCodeType::Table\nselect top 100 * from PriceDiscTable where AccountCode = 1 -- PriceDiscPartyCodeType::Group\nselect top 100 * from PriceDiscTable where AccountCode = 2 -- PriceDiscPartyCodeType::All\n\nselect Relation, count(*) from PriceDiscTable group by Relation\nselect top 100 * from PriceDiscTable where Relation = 0 -- PriceType::PricePurch\nselect top 100 * from PriceDiscTable where Relation = 4 -- PriceType::PriceSales\nselect top 100 * from PriceDiscTable where Relation = 5 -- PriceType::LineDiscSales\n\nselect ItemCode, count(*) from PriceDiscTable group by ItemCode\nselect top 100 * from PriceDiscTable where ItemCode = 0 -- PriceDiscProductCode::Table\nselect top 100 * from PriceDiscTable where ItemCode = 2 -- PriceDiscProductCode::All\n\n\nselect AccountCode, Relation, ItemCode, count(*) \n  from PriceDiscTable \n where DataAreaId = 'DUS'\n   and Relation <> 0 -- PriceType::PricePurch\n   and cast(getdate() as date) between FromDate \n                                   and case when ToDate = cast('1/1/1900' as datetime) then cast('1/1/2100' as datetime) else ToDate end\n group by AccountCode, Relation, ItemCode\n order by 1, 2, 3\n\nselect top 100 AccountCode, Relation, ItemCode, AccountRelation, ItemRelation, Amount, Percent1, *\n  from PriceDiscTable \n where DataAreaId = 'DUS'\n   and Relation <> 0 -- PriceType::PricePurch\n   and cast(getdate() as date) between FromDate \n                                   and case when ToDate = cast('1/1/1900' as datetime) then cast('1/1/2100' as datetime) else ToDate end\n order by 1, 2, 3\n\nselect top 100\n       1 as ApplicationOrder\n      ,pdt.AccountRelation as [Account Number]\n      ,pdt.ItemRelation as [Item Id]\n      ,pdt.Amount * (1 - pdt.Percent1/100) as [Customer Price]\n  from PriceDiscTable pdt\n where pdt.DataAreaId = 'DUS'\n   and pdt.Relation = 5    -- Apply discount percent\n   and pdt.AccountCode = 0 -- Specific customer\n   and pdt.ItemCode = 0    -- Specific item\n   and cast(getdate() as date) between pdt.FromDate \n                                   and case when pdt.ToDate = cast('1/1/1900' as datetime) then cast('1/1/2100' as datetime) else pdt.ToDate end\n\nselect count(*) from PriceDiscTable pdt\n where cast(getdate() as date) between pdt.FromDate \n                                   and case when pdt.ToDate = cast('1/1/1900' as datetime) then cast('1/1/2100' as datetime) else pdt.ToDate end\nselect top 100\n       2 as ApplicationOrder\n      ,ct.AccountNum as [Account Number]\n      ,pdt.ItemRelation as [Item Id]\n      ,pdt.Amount as [Customer Price]\n  from PriceDiscTable pdt\n         inner join CustTable ct on ct.PriceGroup = pdt.AccountRelation and ct.DataAreaId = pdt.DataAreaId\n where pdt.DataAreaId = 'DUS'\n   and pdt.Relation = 4    -- Use specified price\n   and pdt.AccountCode = 1 -- For a customer group\n   and pdt.ItemCode = 0    -- For a specified item\n   and cast(getdate() as date) between pdt.FromDate \n                                   and case when pdt.ToDate = cast('1/1/1900' as datetime) then cast('1/1/2100' as datetime) else pdt.ToDate end\n\nselect top 100\n       3 as ApplicationOrder\n      ,ct.AccountNum as [Account Number]\n      ,it.ItemId as [Item Id]\n      ,pdt.Amount as [Customer Price]\n  from PriceDiscTable pdt\n         inner join CustTable ct on ct.PriceGroup = pdt.AccountRelation and ct.DataAreaId = pdt.DataAreaId\n         inner join InventTable it on it.DataAreaId = pdt.DataAreaId\n where pdt.DataAreaId = 'DUS'\n   and pdt.Relation = 5    -- Apply discount percent\n   and pdt.AccountCode = 1 -- For a customer group\n   and pdt.ItemCode = 2    -- All items\n   and cast(getdate() as date) between pdt.FromDate \n                                   and case when pdt.ToDate = cast('1/1/1900' as datetime) then cast('1/1/2100' as datetime) else pdt.ToDate end\n\nselect CustVendRelation as [Account Number]\n      ,ItemId as [Item Id]\n      ,ExternalItemId as [External Item Id]\n  from CustVendExternalItem cvei\n\n\nselect AccountRelation, count(*) \n  from PriceDiscTable \n where AccountCode = 1 and DataAreaId = 'DUS'\ngroup by AccountRelation\n\nselect LineDisc, count(*) from CustTable group by LineDisc\nselect PriceGroup, count(*) from CustTable group by PriceGroup\n\nselect top 100 PriceGroup from CustTable where DataAreaId = 'Dca'\nselect top 100 * from PRICEDISCGROUP",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "dynamics365_financeandoperations_d365techdelivery_dev_sandbox",
+						"poolName": "Built-in"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/dCustomer_')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "LCoA"
+				},
+				"content": {
+					"query": "use dynamics365_financeandoperations_d365techdelivery_dev_sandbox\ngo\n\nif (Object_Id('stoneridge.dCustomer') is not null) \n   drop view stoneridge.dCustomer\ngo\n\ncreate view stoneridge.dCustomer as\nselect ct.AccountNum as [Account Number]\n      ,ct.PriceGroup as [Default Price Group]\n      ,dpt.Name as [Customer Name]\n      ,ct.DataAreaId -- optional, comment out if only one company\n  from CustTable ct\n         inner join DirPartyTable dpt on dpt.RecId = ct.Party\n /* Test\nselect top 100 * from stoneridge.dCustomer where [Default Price Group] is not null\nselect 'CustTable', count(*) from CustTable\nselect 'stoneridge.dCustomer', count(*) from stoneridge.dCustomer\n\nChange data:\nselect top 100 * from _cdc_CustTable\nselect top 100 * from _cdc_DirPartyTable\n\nMonitoring updates:\nselect RecId, AccountNum, CustGroup, Currency from _cdc_CustTable\nselect RecId, AccountNum, CustGroup, Currency from CustTable where AccountNum = 'DE-001'\n*/\ngo\n\n\n",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "dynamics365_financeandoperations_d365techdelivery_dev_sandbox",
+						"poolName": "Built-in"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('workspaceName'), '/dDate')]",
 			"type": "Microsoft.Synapse/workspaces/sqlscripts",
 			"apiVersion": "2019-06-01-preview",
@@ -3021,6 +3067,29 @@
 					},
 					"currentConnection": {
 						"databaseName": "fno",
+						"poolName": "Built-in"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/dDefaultDimension_')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "LCoA"
+				},
+				"content": {
+					"query": "use dynamics365_financeandoperations_d365techdelivery_dev_sandbox\ngo\n\nif (Object_Id('stoneridge.dDefaultDimension') is not null) \n   drop view stoneridge.dDefaultDimension\ngo\n\ncreate view [stoneridge].[dDefaultDimension] as\n  select davs.RecId\n        ,davs.CostCenterValue as [Cost Center]\n        ,davs.CustomerTypeValue as [Customer Type]\n        ,davs.FinancialProductCategoryValue as [Financial Product Category Code]\n        ,dft.Description as [Financial Product Category]\n        ,davs.LegalEntityValue as [Legal Entity]\n        ,davs.LocationValue as [Location]\n        ,davs.SalesChannelValue as [Sales Channel]\n        ,davs.SalesPersonValue as [Sales Person]\n        ,davs.CustomerGroupValue as [Customer Group]\n    from DimensionAttributeValueSet davs\n           left outer join DimensionFinancialTag dft on dft.Value = davs.FinancialProductCategoryValue \n/* Testing\nselect top 100 * from DimensionAttributeValueSet\nselect top 100 * from stoneridge.dDefaultDimension\nselect top 100 * from stoneridge.dDefaultDimension where [Sales Channel] is not null\nselect 'DimensionAttributeValueSet', count(*) from DimensionAttributeValueSet\nselect 'stoneridge.dDefaultDimension', count(*) from stoneridge.dDefaultDimension\n*/\nGO",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "master",
 						"poolName": "Built-in"
 					},
 					"resultLimit": 5000
@@ -3053,6 +3122,29 @@
 			"dependsOn": []
 		},
 		{
+			"name": "[concat(parameters('workspaceName'), '/dFinancialDimension_')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "LCoA"
+				},
+				"content": {
+					"query": "use dynamics365_financeandoperations_d365techdelivery_dev_sandbox\ngo\n\nif (Object_Id('stoneridge.dFinancialDimension') is not null) \n   drop view stoneridge.dFinancialDimension\ngo\n\ncreate view stoneridge.[dFinancialDimension] as\n  select davc.RecId\n        ,case davc.LedgerDimensionType when 0 then 'Account'\n                                       when 1 then 'Default Account'\n                                       when 2 then 'Budget'\n                                       when 3 then 'Budget Control'\n                                       when 4 then 'Budget Planning'\n                                       else 'Unknown'\n         end as [Ledger Dimension Type]                                       \n        ,m.MainAccountId as [Main Account Number]\n        ,m.Name as [Main Account]\n        ,case m.Type when 0 then ''\n                     when 1 then 'Profit and Loss'\n                     when 2 then 'Revenue'\n                     when 3 then 'Expense'\n                     when 4 then 'Balance Sheet'\n                     when 5 then 'Asset'\n                     when 6 then 'Liability'\n                     when 7 then 'Equity'\n                     when 8 then 'Total'\n                     when 9 then 'Reporting'\n                     else 'Unknown' end as [Main Account Type]\n        ,davc.DisplayValue as [Display]\n        ,davc.CostCenterValue as [Cost Center]\n        ,davc.CustomerTypeValue as [Customer Type]\n        ,davc.FinancialProductCategoryValue as [Financial Product Category Code]\n        ,dft.Description as [Financial Product Category]\n        ,davc.LegalEntityValue as [Legal Entity]\n        ,davc.LocationValue as [Location]\n        ,davc.SalesChannelValue as [Sales Channel]\n        ,davc.SalesPersonValue as [Sales Person]\n        ,davc.CustomerGroupValue as [Customer Group]\n    from DimensionAttributeValueCombination davc\n           left outer join DimensionFinancialTag dft on dft.Value = davc.FinancialProductCategoryValue \n           left outer join MainAccount m on m.RecId = davc.MainAccount\n\n/* Testing\nselect top 100 * from stoneridge.dFinancialDimension\nselect top 100 * from DimensionAttributeValueCombination\nselect top 100 * from stoneridge.dFinancialDimension where [Sales Channel] is not null\nselect 'DimensionAttributeValueCombination', count(*) from DimensionAttributeValueCombination\nselect 'stoneridge.dFinancialDimension', count(*) from stoneridge.dFinancialDimension\nselect [Ledger Dimension Type], count(*) from stoneridge.dFinancialDimension group by [Ledger Dimension Type]\n\n// To expand the Sale Person attribute...\nselect * from DimensionFinancialTag where FinancialTagCategory = '5637144583'\n*/\ngo",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "master",
+						"poolName": "Built-in"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('workspaceName'), '/dInventoryDimension')]",
 			"type": "Microsoft.Synapse/workspaces/sqlscripts",
 			"apiVersion": "2019-06-01-preview",
@@ -3067,6 +3159,29 @@
 					},
 					"currentConnection": {
 						"databaseName": "fno",
+						"poolName": "Built-in"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/dInventoryDimension_')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "LCoA"
+				},
+				"content": {
+					"query": "use dynamics365_financeandoperations_d365techdelivery_dev_sandbox\ngo\n\nif (Object_Id('stoneridge.dInventoryDimension') is not null) \n   drop view stoneridge.dInventoryDimension\ngo\n\ncreate view stoneridge.dInventoryDimension as\nselect InventDimId\n      ,InventBatchId as [Batch Id]\n      ,InventStatusId as [Inventory Status]\n      ,InventSiteId as [Site]\n      ,InventLocationId as [Warehouse]\n      ,wmsLocationId as [Warehouse Location]\n      ,DataAreaId\n  from InventDim\n/* Test\nselect top 100 * from InventDim where \nselect count(*) from InventDim\nselect count(*) from stoneridge.dInventoryDimension\n*/\ngo\n",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "master",
 						"poolName": "Built-in"
 					},
 					"resultLimit": 5000
@@ -3113,6 +3228,29 @@
 					},
 					"currentConnection": {
 						"databaseName": "fno",
+						"poolName": "Built-in"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/dItem_')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "LCoA"
+				},
+				"content": {
+					"query": "use dynamics365_financeandoperations_d365techdelivery_dev_sandbox\ngo\n\nif (Object_Id('stoneridge.dItem') is not null) \n   drop view stoneridge.dItem\ngo\n\ncreate view stoneridge.dItem as\nwith\ncategoryPivot as (\n  select erpc.Product \n        ,min(case erch.Name when 'CA Ecommerce' then erc.Name end) as [CA Ecommerce]\n        ,min(case erch.Name when 'Color' then erc.Name end) as [Color]\n        ,min(case erch.Name when 'Exclusive For' then erc.Name end) as [Exclusive For]\n        ,min(case erch.Name when 'Financial Reporting Category' then erc.Name end) as [Financial Reporting Category]\n        ,min(case erch.Name when 'Global Design' then erc.Name end) as [Global Design]\n        ,min(case erch.Name when 'Group Class' then erc.Name end) as [Group Class]\n        ,min(case erch.Name when 'Group Color' then erc.Name end) as [Group Color]\n        ,min(case erch.Name when 'Group Department' then erc.Name end) as [Group Department]\n        ,min(case erch.Name when 'Group Division' then erc.Name end) as [Group Division]\n        ,min(case erch.Name when 'Group Product Type' then erc.Name end) as [Group Product Type]\n        ,min(case erch.Name when 'Made-of' then erc.Name end) as [Made-of]\n        ,min(case erch.Name when 'New releases' then erc.Name end) as [New releases]\n        ,min(case erch.Name when 'Procurement' then erc.Name end) as [Procurement]\n        ,min(case erch.Name when 'Retail Brand' then erc.Name end) as [Retail Brand]\n        ,min(case erch.Name when 'Retail Capacity' then erc.Name end) as [Retail Capacity]\n        ,min(case erch.Name when 'Retail Class' then erc.Name end) as [Retail Class]\n        ,min(case erch.Name when 'Retail Cookware Promo' then erc.Name end) as [Retail Cookware Promo]\n        ,min(case erch.Name when 'Retail Department' then erc.Name end) as [Retail Department]\n        ,min(case erch.Name when 'Retail Division' then erc.Name end) as [Retail Division]\n        ,min(case erch.Name when 'Retail Local Color' then erc.Name end) as [Retail Local Color]\n        ,min(case erch.Name when 'Retail Material' then erc.Name end) as [Retail Material]\n        ,min(case erch.Name when 'Retail Quality' then erc.Name end) as [Retail Quality]\n        ,min(case erch.Name when 'Retail Range' then erc.Name end) as [Retail Range]\n        ,min(case erch.Name when 'Retail Shape' then erc.Name end) as [Retail Shape]\n        ,min(case erch.Name when 'Retail Size' then erc.Name end) as [Retail Size]\n        ,min(case erch.Name when 'Retail Tools Promo' then erc.Name end) as [Retail Tools Promo]\n        ,min(case erch.Name when 'US DTC Distribution' then erc.Name end) as [US DTC Distribution]\n        ,min(case erch.Name when 'Used-for' then erc.Name end) as [Used-for]\n  from EcoResProductCategory erpc \n       left outer join EcoResCategoryHierarchy erch on erch.RecId = erpc.CategoryHierarchy\n       left outer join EcoResCategory erc on erc.RecId = erpc.Category\n group by erpc.Product \n),\nenglishProductNames as (\n  select erpt.Product\n        ,erpt.Name as [Product Name]\n        ,erpt.Description as [Product Description]\n    from EcoResProductTranslation erpt\n where erpt.LanguageId = 'En-US'\n),\nbatchAttributePivot as (\n  select pba.ItemId\n        ,min(case pba.PdsBatchAttribId when 'MID' then pba.PdsBatchAttribValue end) as [Prism Id]\n        ,min(case pba.PdsBatchAttribId when 'COO' then pba.PdsBatchAttribValue end) as [Country of Origin]\n        ,min(case pba.PdsBatchAttribId when 'Full CI Weight (Kg)' then pba.PdsBatchAttribValue end) as [Full CI Weight (Kg)]\n--??        ,min(case pba.PdsBatchAttribId when 'Gross Weight (Kg)' then pba.PdsBatchAttribValue end) as [Gross Weight (Kg)]\n--??        ,min(case pba.PdsBatchAttribId when 'Net weight (Kg)' then pba.PdsBatchAttribValue end) as [Net weight (Kg)]\n    from PdsBatchAttributes pba\n           inner join InventBatch ib on ib.ItemId = pba.ItemId and ib.InventBatchId = pba.InventBatchId\n   where ib.AMERPrimaryBatch = 1\n     and ib.DataAreaId = 'DUS'\n     and pba.DataAreaId = 'DUS' \n   group by pba.ItemId\n),\nitemCost as (\n  select ItemId\n        ,avg(Price/PriceUnit) as [Average Unit Cost]\n    from InventItemPrice iips\n   where ActivationDate <= cast(getDate() as date)\n     and CostingType = 3 -- InventItemCostingType::Last\n     and DataAreaId = 'DUS'\n   group by ItemId\n)\n--primaryBatchBarcode as (\n--  select iibc.ItemId\n--        ,iibc.ItemBarCode as [Primary Barcode]\n--    from InventItemBarcode iibc\n--           left outer join InventBatch ib on ib.ItemId = iibc.ItemId \n--                                         and ib.AMERPrimaryBatch = 1\n--  where ib.DataAreaId = 'DUS'\n--    and iibc.DataAreaId = 'DUS'\n--    and iibc.InventDimId = 'AllBlank' \n--    and iibc.Qty = 1\n--)\nselect it.ItemId as [Item Id]\n      ,epn.[Product Name]\n      ,epn.[Product Description]\n      ,it.DefaultDimension as [Default Dimension RecId]\n--      ,pb.[Primary Barcode]\n      ,[CA Ecommerce]\n      ,[Color]\n      ,[Exclusive For]\n      ,[Financial Reporting Category]\n      ,[Global Design]\n      ,[Group Class]\n      ,[Group Color]\n      ,[Group Department]\n      ,[Group Division]\n      ,[Group Product Type]\n      ,[Made-of]\n      ,[New releases]\n      ,[Procurement]\n      ,[Retail Brand]\n      ,[Retail Capacity]\n      ,[Retail Class]\n      ,[Retail Cookware Promo]\n      ,[Retail Department]\n      ,[Retail Division]\n      ,[Retail Local Color]\n      ,[Retail Material]\n      ,[Retail Quality]\n      ,[Retail Range]\n      ,[Retail Shape]\n      ,[Retail Size]\n      ,[Retail Tools Promo]\n      ,[US DTC Distribution]\n      ,[Used-for]\n      ,erpls.StateId as [Product Lifecycle State Id]\n      ,erpls.Description as [Product Lifecycle State]\n      ,[Prism Id]\n      ,[Country of Origin]\n      ,CAST([Full CI Weight (Kg)] as DECIMAL(10,2)) as [Full CI Weight (Kg)]\n      ,CAST([Full CI Weight (Kg)] as DECIMAL(10,2)) / 1000 as [Full CI Weight (Ton)]\n      ,[Average Unit Cost]\n--    ,[Gross Weight (Kg)]\n--    ,[Net weight (Kg)]\n  from InventTable it\n         left outer join englishProductNames epn on epn.Product = it.Product\n         left outer join categoryPivot cp on cp.Product = it.Product\n--         left outer join primaryBatchBarcode pb on pb.ItemId = it.ItemId \n         left outer join batchAttributePivot bap on bap.ItemId = it.ItemId\n         left outer join EcoResProductLifecycleState erpls on erpls.StateId = it.ProductLifecycleStateId\n         left outer join itemCost ic on ic.ItemId = it.ItemId\n where it.DataAreaId = 'DUS'\n/* Test\nselect top 100 * from stoneridge.dItem\nselect 'InventTable', count(*) from InventTable where DataAreaId = 'DUS' -- 6542\nselect 'stoneridge.dItem', count(*) from stoneridge.dItem -- 6542 (should be the same as above)\nselect 'Dim_ItemHierarchy', count(*) from Dim_ItemHierarchy -- 535769\n*/\ngo\n",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "master",
 						"poolName": "Built-in"
 					},
 					"resultLimit": 5000
@@ -3237,6 +3375,29 @@
 			"dependsOn": []
 		},
 		{
+			"name": "[concat(parameters('workspaceName'), '/fInventoryTransfer_')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "LCoA"
+				},
+				"content": {
+					"query": "use dynamics365_financeandoperations_d365techdelivery_dev_sandbox\ngo\n\nif (Object_Id('stoneridge.fInventoryTransfer') is not null) \n   drop view stoneridge.fInventoryTransfer\ngo\n\ncreate view stoneridge.fInventoryTransfer as\nselect itt.TransferId as [Transfer Id]\n      ,itl.ItemId as [Item Id]\n      ,itt.InventLocationIdFrom as [From Location]\n      ,itt.InventLocationIdTo as [To Location]\n      ,case itt.TransferStatus when 0 then 'Created'\n                              when 1 then 'Shipped'\n                              when 2 then 'Received'\n                              else 'Unknown'\n       end as [Status]\n      ,itl.CreatedDateTime as [Created DateTime]\n      ,itl.ShipDate as [Ship Date]\n      ,itl.ReceiveDate as [Receive Date]\n      ,itl.QtyTransfer as [Transfer Quantity]\n      ,itl.QtyShipped as [Shipped Quantity]\n      ,itl.QtyRemainShip as [Remaining Ship Quantity]\n      ,itl.QtyReceived as [Received Quantity]\n      ,itl.QtyRemainReceive as [Remaining Receive Quantity]\n  from InventTransferTable itt\n         inner join InventTransferLine itl on itl.TransferId = itt.TransferId and itl.DataAreaId = itt.DataAreaId\n where itt.DataAreaId = 'DUS'\n /* Test\n select count(*) from InventTransferLine where DataAreaId = 'DUS'\n select count(*) from stoneridge.fInventoryTransfer\n select top 100 * from InventTransferLine where DataAreaId = 'DUS'\n select top 100 * from stoneridge.fInventoryTransfer where [Transfer Id] = 'TR-00006121'\n */\n go \n",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "master",
+						"poolName": "Built-in"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('workspaceName'), '/fInvoice')]",
 			"type": "Microsoft.Synapse/workspaces/sqlscripts",
 			"apiVersion": "2019-06-01-preview",
@@ -3246,6 +3407,29 @@
 				},
 				"content": {
 					"query": "select top 100 *\n  from raw.CustInvoiceTrans",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "master",
+						"poolName": "Built-in"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/fInvoice_')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "LCoA"
+				},
+				"content": {
+					"query": "use dynamics365_financeandoperations_d365techdelivery_dev_sandbox\ngo\n\nif (Object_Id('stoneridge.fInvoice') is not null) \n   drop view stoneridge.fInvoice\ngo\n\ncreate view stoneridge.fInvoice as\nselect distinct cit.InvoiceId as [Invoice Id] -- 'distinct' can be remove after bug for multiple InvoiceIds fixed\n      ,cit.ItemId as [Item Id]\n      ,cit.SalesId as [Sales Id]\n      ,cit.InvoiceDate as [Invoice Date]\n      ,cit.LineAmountMST as [Invoice Amount]\n      ,cit.Qty as [Invoice Quantity]\n      ,cit.InventTransId\n  from CustInvoiceTrans cit\n         inner join CustInvoiceJour cij on cit.InvoiceId = cij.InvoiceId and cit.DataAreaId = cij.DataAreaId\n where cij.DataAreaId = 'DUS' and cit.InventTransId is not NULL\n /* Test\n select top 100 * from stoneridge.fInvoice\n select [Invoice Id], count(*) as [Count] from stoneridge.fInvoice group by [Invoice Id] order by [Count] desc\n select InvoiceId, count(*) as [Count] from dbo.CustInvoiceJour group by InvoiceId order by [Count] desc\n */",
 					"metadata": {
 						"language": "sql"
 					},
