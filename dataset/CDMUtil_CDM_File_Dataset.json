@@ -4,7 +4,10 @@
 		"description": "Source cdm.json files",
 		"linkedServiceName": {
 			"referenceName": "Source_DataLake",
-			"type": "LinkedServiceReference"
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"StorageAccount": "https://techdeliverydatalake.dfs.core.windows.net/"
+			}
 		},
 		"parameters": {
 			"Container": {
