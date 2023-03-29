@@ -11,6 +11,9 @@
 		"FnO_TechDeliverySynapse_connectionString": {
 			"value": ""
 		},
+		"PipelineTarget_connectionString": {
+			"value": ""
+		},
 		"SourceDataLake_accountKey": {
 			"value": ""
 		},
@@ -18,6 +21,9 @@
 			"value": ""
 		},
 		"SynapseDB_connectionString": {
+			"value": ""
+		},
+		"SynapseSource_connectionString": {
 			"value": ""
 		},
 		"TargetSQLDB_connectionString": {
