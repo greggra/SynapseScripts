@@ -1,0 +1,350 @@
+{
+	"name": "DataLakeToSQLCopy",
+	"properties": {
+		"activities": [
+			{
+				"name": "CopyData",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "GetMetadataDetails",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('GetMetadataDetails').output.value",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "CheckForNewFiles",
+							"type": "GetMetadata",
+							"dependsOn": [
+								{
+									"activity": "SetFromDateTime",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								},
+								{
+									"activity": "SetToDateTime",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [
+								{
+									"name": "TABLE_NAME",
+									"value": "@item().dataLocation"
+								}
+							],
+							"typeProperties": {
+								"dataset": {
+									"referenceName": "CSVDataFiles",
+									"type": "DatasetReference",
+									"parameters": {
+										"Container": {
+											"value": "@item().SourceContainer",
+											"type": "Expression"
+										},
+										"Folder": {
+											"value": "@concat(item().Environment, '/', item().DataLocation)",
+											"type": "Expression"
+										}
+									}
+								},
+								"fieldList": [
+									"childItems"
+								],
+								"storeSettings": {
+									"type": "AzureBlobFSReadSettings",
+									"recursive": true,
+									"modifiedDatetimeStart": {
+										"value": "@variables('FromDateTime')",
+										"type": "Expression"
+									},
+									"modifiedDatetimeEnd": {
+										"value": "@variables('ToDateTime')",
+										"type": "Expression"
+									},
+									"enablePartitionDiscovery": false
+								},
+								"formatSettings": {
+									"type": "DelimitedTextReadSettings"
+								}
+							}
+						},
+						{
+							"name": "IfNewFiles",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "CheckForNewFiles",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@greater(length(activity('CheckForNewFiles').output.childItems),1)",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "CDMToSQL",
+										"type": "ExecuteDataFlow",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "1.00:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [
+											{
+												"name": "EntityName",
+												"value": "@item().entityName"
+											}
+										],
+										"typeProperties": {
+											"dataflow": {
+												"referenceName": "CDMToSQL",
+												"type": "DataFlowReference",
+												"parameters": {
+													"SourceContainer": {
+														"value": "'@{item().SourceContainer}'",
+														"type": "Expression"
+													},
+													"ManifestPath": {
+														"value": "'@{item().metadataLocation}'",
+														"type": "Expression"
+													},
+													"ManifefastName": {
+														"value": "'@{string(last(split(item().metadataLocation, '/')))}'",
+														"type": "Expression"
+													},
+													"TableName": {
+														"value": "'@{item().entityName}'",
+														"type": "Expression"
+													},
+													"FromDateTime": {
+														"value": "toTimestamp(left('@{variables('FromDateTime')}', 19), 'yyyy-MM-dd\\'T\\'HH:mm:ss')",
+														"type": "Expression"
+													},
+													"ToDateTime": {
+														"value": "toTimestamp(left('@{variables('ToDateTime')}', 19), 'yyyy-MM-dd\\'T\\'HH:mm:ss')",
+														"type": "Expression"
+													},
+													"Schema": {
+														"value": "'@{item().schema}'",
+														"type": "Expression"
+													},
+													"DataFiles": {
+														"value": "'@{activity('CheckForNewFiles').output.childItems}'",
+														"type": "Expression"
+													},
+													"Environment": {
+														"value": "'@{item().Environment}'",
+														"type": "Expression"
+													}
+												},
+												"linkedServiceParameters": {
+													"SQLSink": {
+														"linkedService": {
+															"DbName": "d365finance"
+														}
+													},
+													"FullExportSQL": {
+														"linkedService": {
+															"DbName": "d365finance"
+														}
+													}
+												}
+											},
+											"compute": {
+												"coreCount": 8,
+												"computeType": "General"
+											},
+											"traceLevel": "Fine"
+										}
+									}
+								]
+							}
+						},
+						{
+							"name": "ArchiveChangeFeed",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "IfNewFiles",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@and(not(equals(item().LastCopyMarker,null)),greater(length(activity('CheckForNewFiles').output.childItems),1))",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "DeleteFiles",
+										"type": "Delete",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"dataset": {
+												"referenceName": "CSVDataFiles",
+												"type": "DatasetReference",
+												"parameters": {
+													"Container": {
+														"value": "@item().SourceContainer",
+														"type": "Expression"
+													},
+													"Folder": {
+														"value": "@item().DataLocation",
+														"type": "Expression"
+													}
+												}
+											},
+											"enableLogging": false,
+											"storeSettings": {
+												"type": "AzureBlobFSReadSettings",
+												"recursive": false,
+												"modifiedDatetimeStart": {
+													"value": "@variables('FromDateTime')",
+													"type": "Expression"
+												},
+												"modifiedDatetimeEnd": {
+													"value": "@variables('ToDateTime')",
+													"type": "Expression"
+												},
+												"wildcardFileName": "*.csv",
+												"enablePartitionDiscovery": false
+											}
+										}
+									}
+								]
+							}
+						},
+						{
+							"name": "SetFromDateTime",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "FromDateTime",
+								"value": {
+									"value": "@item().LastCopyDateTime",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "SetToDateTime",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "ToDateTime",
+								"value": {
+									"value": "@utcnow()",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "GetMetadataDetails",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT \n TableSchema as [Schema]\n, TableName as EntityName \n, Container as SourceContainer\n, Environment as Environment\n ,case \n\twhen LastCopyDateTime is  Null \n\t\tThen replace(DataPath, '/*.csv', '')  \n\tElse \n\t\t  concat ('/ChangeFeed/', TableName)\nend as DataLocation\n,case \n\twhen LastCopyDateTime is  Null \n\t\tThen replace(replace(DataPath, '/' + TableName, ''),'/*.csv', '')  \n\tElse \n\t\t  '/ChangeFeed'\nend as MetadataLocation\n, LastCopyMarker\n, LastCopyDateTime\nFROM [dbo].[_ControlTableForCopy]\nwhere TableSchema = '@{pipeline().parameters.Schema}'\nand ('@{pipeline().parameters.TableNames}' = '*' OR TableName  in (select value from string_split('@{pipeline().parameters.TableNames}', ',')))",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "AzureSqlQuery",
+						"type": "DatasetReference",
+						"parameters": {
+							"DbName": {
+								"value": "@pipeline().parameters.DbName",
+								"type": "Expression"
+							}
+						}
+					},
+					"firstRowOnly": false
+				}
+			}
+		],
+		"parameters": {
+			"TableNames": {
+				"type": "string",
+				"defaultValue": "CustGroup"
+			},
+			"Schema": {
+				"type": "string",
+				"defaultValue": "dbo"
+			},
+			"DbName": {
+				"type": "string",
+				"defaultValue": "d365finance"
+			}
+		},
+		"variables": {
+			"FromDateTime": {
+				"type": "string",
+				"defaultValue": "1900-01-01T00:00:00Z"
+			},
+			"ToDateTime": {
+				"type": "string",
+				"defaultValue": "9999-12-31T00:00:00Z"
+			}
+		},
+		"folder": {
+			"name": "4.DataLakeToSQL"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-09-05T11:05:07Z"
+	}
+}

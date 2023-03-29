@@ -1,0 +1,142 @@
+{
+	"name": "CDMToSQL",
+	"properties": {
+		"folder": {
+			"name": "CDMToSQL"
+		},
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"linkedService": {
+						"referenceName": "Source_DataLake",
+						"type": "LinkedServiceReference"
+					},
+					"name": "SourceCDMTable"
+				}
+			],
+			"sinks": [
+				{
+					"linkedService": {
+						"referenceName": "Target_Database",
+						"type": "LinkedServiceReference"
+					},
+					"name": "SQLSink"
+				},
+				{
+					"linkedService": {
+						"referenceName": "Target_Database",
+						"type": "LinkedServiceReference"
+					},
+					"name": "FullExportSQL"
+				}
+			],
+			"transformations": [
+				{
+					"name": "RemoveColumns"
+				},
+				{
+					"name": "alterRow"
+				},
+				{
+					"name": "IdentifyColumns"
+				},
+				{
+					"name": "RankRowVersion"
+				},
+				{
+					"name": "Deduplicate"
+				},
+				{
+					"name": "split1"
+				}
+			],
+			"scriptLines": [
+				"parameters{",
+				"     SourceContainer as string ('dynamics365-financeandoperations'),",
+				"     ManifestPath as string ('Tables/Finance/AccountsReceivable/Group'),",
+				"     ManifefastName as string ('Group'),",
+				"     TableName as string ('CustGroup'),",
+				"     FromDateTime as timestamp (currentTimestamp()-days(365)),",
+				"     ToDateTime as timestamp (currentTimestamp()),",
+				"     Schema as string ('dbo'),",
+				"     DataFiles as string,",
+				"     Environment as string ('test')",
+				"}",
+				"source(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     inferDriftedColumnTypes: true,",
+				"     ignoreNoFilesFound: true,",
+				"     modifiedAfter: ($FromDateTime),",
+				"     modifiedBefore: ($ToDateTime),",
+				"     entity: ($TableName),",
+				"     format: 'cdm',",
+				"     manifestType: 'manifest',",
+				"     manifestName: ($ManifefastName),",
+				"     entityPath: ($ManifestPath),",
+				"     local: true,",
+				"     folderPath: ($Environment),",
+				"     fileSystem: ($SourceContainer),",
+				"     dateFormats: ['yyyy-MM-dd'],",
+				"     timestampFormats: ['yyyy-MM-dd\\'T\\'HH:mm:ss.SSS\\'Z\\'','yyyy-MM-dd\\'T\\'HH:mm:ss\\'Z\\'','yyyy-MM-dd\\'T\\'HH:mm:ss'],",
+				"     preferredFractionalType: 'float') ~> SourceCDMTable",
+				"Deduplicate select(mapColumn(",
+				"          each(match(name!='_SysRowId'&&name!='LSN'&&name!='Update_Mask'&&name!='Start_LSN'&&name!='End_LSN'&&name!='Seq_Val'))",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> RemoveColumns",
+				"RemoveColumns alterRow(upsertIf(isNull(DML_Action)||DML_Action==\"INSERT\"||DML_Action==\"AFTER_UPDATE\"),",
+				"     deleteIf(DML_Action==\"DELETE\")) ~> alterRow",
+				"SourceCDMTable derive(Start_LSN = toString(byName(\"Start_LSN\")),",
+				"          Seq_Val = toString(byName(\"Seq_Val\")),",
+				"          DataLakeModified_DateTime = toTimestamp(byName(\"DataLakeModified_DateTime\")),",
+				"          RECID = toLong(byName(\"RECID\")),",
+				"          DML_Action = toString(byName(\"DML_Action\")),",
+				"          {_RowVersion} = 0) ~> IdentifyColumns",
+				"split1@IncrementalExport window(over(RECID),",
+				"     desc(Start_LSN, true),",
+				"     desc(Seq_Val, true),",
+				"     desc(DataLakeModified_DateTime, true),",
+				"     desc(DML_Action, true),",
+				"     {_RowVersion} = denseRank()) ~> RankRowVersion",
+				"RankRowVersion filter(toLong(byName(\"_RowVersion\"))==1) ~> Deduplicate",
+				"IdentifyColumns split($ManifefastName == \"ChangeFeed\",",
+				"     disjoint: false) ~> split1@(IncrementalExport, FullExport)",
+				"alterRow sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'table',",
+				"     store: 'sqlserver',",
+				"     schemaName: ($Schema),",
+				"     tableName: ($TableName),",
+				"     preSQLs:[(concat(\"begin tran; update  [dbo].[_ControlTableForCopy] set LastCopyStatus = 1 where TableSchema = '\",$Schema , \"' and TableName = '\" , $TableName ,\"' commit tran;\"))],",
+				"     insertable: true,",
+				"     updateable: true,",
+				"     deletable: true,",
+				"     upsertable: true,",
+				"     keys:['RECID'],",
+				"     postSQLs:[(concat(\"begin tran; declare @ChildItems nvarchar(max)='\", $DataFiles,\"'; declare @ToDateTime DateTime='\", toString($ToDateTime),\"'; declare @LastFileName nvarchar(200) = (select max(name) from Openjson(@ChildItems) with (name nvarchar(100) '$.name') where name != 'index.json');  update  [dbo].[_ControlTableForCopy] set LastCopyDateTime =@ToDateTime, LastCopyMarker = @LastFileName, LastCopyStatus = 0 where TableSchema = '\",$Schema , \"' and TableName = '\" , $TableName ,\"' commit tran;\"))],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     errorHandlingOption: 'stopOnFirstError',",
+				"     preCommands: [],",
+				"     postCommands: []) ~> SQLSink",
+				"split1@FullExport sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'table',",
+				"     store: 'sqlserver',",
+				"     schemaName: ($Schema),",
+				"     tableName: ($TableName),",
+				"     preSQLs:[(concat(\"begin tran; update  [dbo].[_ControlTableForCopy] set LastCopyStatus = 1 where TableSchema = '\",$Schema , \"' and TableName = '\" , $TableName ,\"' commit tran;\"))],",
+				"     insertable: true,",
+				"     updateable: false,",
+				"     deletable: false,",
+				"     upsertable: false,",
+				"     truncate: true,",
+				"     postSQLs:[(concat(\"begin tran; declare @ChildItems nvarchar(max)='\", $DataFiles,\"'; declare @ToDateTime DateTime='\", toString($ToDateTime),\"'; declare @LastFileName nvarchar(200) = (select max(name) from Openjson(@ChildItems) with (name nvarchar(100) '$.name') where name != 'index.json');  update  [dbo].[_ControlTableForCopy] set LastCopyDateTime =@ToDateTime, LastCopyMarker = @LastFileName, LastCopyStatus = 0 where TableSchema = '\",$Schema , \"' and TableName = '\" , $TableName ,\"' commit tran;\"))],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     errorHandlingOption: 'stopOnFirstError') ~> FullExportSQL"
+			]
+		}
+	}
+}

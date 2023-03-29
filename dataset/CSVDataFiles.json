@@ -1,37 +1,35 @@
 {
-	"name": "CDMUtil_DependencyFile_Dataset",
+	"name": "CSVDataFiles",
 	"properties": {
 		"linkedServiceName": {
-			"referenceName": "techdeliverydatalaketesting-WorkspaceDefaultStorage",
+			"referenceName": "Source_DataLake",
 			"type": "LinkedServiceReference"
 		},
 		"parameters": {
-			"container": {
+			"Container": {
 				"type": "string"
 			},
-			"folder": {
-				"type": "string"
-			},
-			"StorageAccount": {
+			"Folder": {
 				"type": "string"
 			}
 		},
 		"annotations": [],
-		"type": "Parquet",
+		"type": "DelimitedText",
 		"typeProperties": {
 			"location": {
 				"type": "AzureBlobFSLocation",
-				"fileName": "dependencies.parquet",
 				"folderPath": {
-					"value": "@dataset().folder",
+					"value": "@dataset().Folder",
 					"type": "Expression"
 				},
 				"fileSystem": {
-					"value": "@dataset().container",
+					"value": "@dataset().Container",
 					"type": "Expression"
 				}
 			},
-			"compressionCodec": "snappy"
+			"columnDelimiter": ",",
+			"escapeChar": "\\",
+			"quoteChar": "\""
 		},
 		"schema": []
 	}

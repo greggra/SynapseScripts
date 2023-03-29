@@ -1,0 +1,23 @@
+{
+	"name": "AzureSqlQuery",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "Target_Database",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"DbName": {
+					"value": "@dataset().DbName",
+					"type": "Expression"
+				}
+			}
+		},
+		"parameters": {
+			"DbName": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": []
+	}
+}
