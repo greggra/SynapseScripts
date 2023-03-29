@@ -11,6 +11,9 @@
 		"FnO_TechDeliverySynapse_connectionString": {
 			"value": ""
 		},
+		"Source_DataLake_accountKey": {
+			"value": ""
+		},
 		"Target_Database_connectionString": {
 			"value": "Integrated Security=False;Encrypt=True;Connection Timeout=30;Data Source=@{linkedService().DbServer};Initial Catalog=@{linkedService().DbName}"
 		},
