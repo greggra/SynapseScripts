@@ -15,9 +15,21 @@
 			"type": "secureString",
 			"metadata": "Secure string for 'connectionString' of 'FnO_TechDeliverySynapse'"
 		},
+		"SourceDataLake_accountKey": {
+			"type": "secureString",
+			"metadata": "Secure string for 'accountKey' of 'SourceDataLake'"
+		},
 		"Source_DataLake_accountKey": {
 			"type": "secureString",
 			"metadata": "Secure string for 'accountKey' of 'Source_DataLake'"
+		},
+		"SynapseDB_connectionString": {
+			"type": "secureString",
+			"metadata": "Secure string for 'connectionString' of 'SynapseDB'"
+		},
+		"TargetSQLDB_connectionString": {
+			"type": "secureString",
+			"metadata": "Secure string for 'connectionString' of 'TargetSQLDB'"
 		},
 		"Target_Database_connectionString": {
 			"type": "secureString",
@@ -33,17 +45,9 @@
 			"metadata": "Secure string for 'connectionString' of 'techdeliverydatalaketesting-WorkspaceDefaultSqlServer'",
 			"defaultValue": "Integrated Security=False;Encrypt=True;Connection Timeout=30;Data Source=tcp:techdeliverydatalaketesting.sql.azuresynapse.net,1433;Initial Catalog=@{linkedService().DBName}"
 		},
-		"TargetSQLDB_connectionString": {
-			"type": "secureString",
-			"metadata": "Secure string for 'connectionString' of 'TargetSQLDB'"
-		},
-		"SourceDataLake_accountKey": {
-			"type": "secureString",
-			"metadata": "Secure string for 'accountKey' of 'SourceDataLake'"
-		},
-		"SynapseDB_connectionString": {
-			"type": "secureString",
-			"metadata": "Secure string for 'connectionString' of 'SynapseDB'"
+		"SourceDataLake_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://techdeliverydatalake.dfs.core.windows.net/"
 		},
 		"Source_DataLake_properties_typeProperties_url": {
 			"type": "string",
@@ -60,16 +64,1099 @@
 		"techdeliverydatalaketesting-WorkspaceDefaultStorage_properties_typeProperties_url": {
 			"type": "string",
 			"defaultValue": "https://techdeliverydatalake.dfs.core.windows.net"
-		},
-		"SourceDataLake_properties_typeProperties_url": {
-			"type": "string",
-			"defaultValue": "https://techdeliverydatalake.dfs.core.windows.net/"
 		}
 	},
 	"variables": {
 		"workspaceId": "[concat('Microsoft.Synapse/workspaces/', parameters('workspaceName'))]"
 	},
 	"resources": [
+		{
+			"name": "[concat(parameters('workspaceName'), '/DataLakeToSQLCopy')]",
+			"type": "Microsoft.Synapse/workspaces/pipelines",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"activities": [
+					{
+						"name": "ForEachTables",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "GetControlTable",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('GetControlTable').output.value",
+								"type": "Expression"
+							},
+							"activities": [
+								{
+									"name": "SetFromDateTime",
+									"type": "SetVariable",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "FromDateTime",
+										"value": {
+											"value": "@item().LastCopyDateTime",
+											"type": "Expression"
+										}
+									}
+								},
+								{
+									"name": "SetToDateTime",
+									"type": "SetVariable",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "ToDateTime",
+										"value": {
+											"value": "@utcnow()",
+											"type": "Expression"
+										}
+									}
+								},
+								{
+									"name": "CheckForNewFiles",
+									"type": "GetMetadata",
+									"dependsOn": [
+										{
+											"activity": "SetToDateTime",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										},
+										{
+											"activity": "SetFromDateTime",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [
+										{
+											"name": "TABLE_NAME",
+											"value": "@item().dataLocation"
+										}
+									],
+									"typeProperties": {
+										"dataset": {
+											"referenceName": "DataLakeToSQL_CSV_File_Dataset11",
+											"type": "DatasetReference",
+											"parameters": {
+												"Container": {
+													"value": "@item().SourceContainer",
+													"type": "Expression"
+												},
+												"Folder": {
+													"value": "@concat(item().Environment,'/', item().DataLocation)",
+													"type": "Expression"
+												},
+												"StorageAccount": {
+													"value": "@item().StorageAccount",
+													"type": "Expression"
+												}
+											}
+										},
+										"fieldList": [
+											"childItems"
+										],
+										"storeSettings": {
+											"type": "AzureBlobFSReadSettings",
+											"recursive": true,
+											"modifiedDatetimeStart": {
+												"value": "@variables('FromDateTime')",
+												"type": "Expression"
+											},
+											"modifiedDatetimeEnd": {
+												"value": "@variables('ToDateTime')",
+												"type": "Expression"
+											},
+											"enablePartitionDiscovery": false
+										},
+										"formatSettings": {
+											"type": "DelimitedTextReadSettings"
+										}
+									}
+								},
+								{
+									"name": "ArchiveChangeFeed",
+									"type": "IfCondition",
+									"dependsOn": [
+										{
+											"activity": "CopyAndMerge",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"expression": {
+											"value": "@and(startswith(item().DataLocation,'/ChangeFeed'),greater(length(activity('CheckForNewFiles').output.childItems),1))",
+											"type": "Expression"
+										},
+										"ifTrueActivities": [
+											{
+												"name": "DeleteFiles",
+												"type": "Delete",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"dataset": {
+														"referenceName": "DataLakeToSQL_CSV_File_Dataset11",
+														"type": "DatasetReference",
+														"parameters": {
+															"Container": {
+																"value": "@item().SourceContainer",
+																"type": "Expression"
+															},
+															"Folder": {
+																"value": "@concat(item().Environment,item().DataLocation)",
+																"type": "Expression"
+															},
+															"StorageAccount": {
+																"value": "@item().StorageAccount",
+																"type": "Expression"
+															}
+														}
+													},
+													"enableLogging": false,
+													"storeSettings": {
+														"type": "AzureBlobFSReadSettings",
+														"recursive": false,
+														"modifiedDatetimeEnd": {
+															"value": "@variables('ToDateTime')",
+															"type": "Expression"
+														},
+														"wildcardFileName": "*.csv",
+														"enablePartitionDiscovery": false
+													}
+												}
+											}
+										]
+									}
+								},
+								{
+									"name": "CopyAndMerge",
+									"type": "Switch",
+									"dependsOn": [
+										{
+											"activity": "CheckForNewFiles",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"on": {
+											"value": "@if(lessOrEquals(length(activity('CheckForNewFiles').output.childItems),1),'Default', \nif(endswith(pipeline().parameters.DbServer, '.sql.azuresynapse.net'), 'DedicatedPool',\nif(and(equals(pipeline().parameters.SourceDbServer, null),endswith(pipeline().parameters.DbServer, '.database.windows.net')), 'AzureSQL_Dataflow', \nif(and(not(equals(pipeline().parameters.SourceDbServer, null)), endswith(pipeline().parameters.DbServer, '.database.windows.net')), 'AzureSQL_Serverless'\n,'Default' ))))",
+											"type": "Expression"
+										},
+										"cases": [
+											{
+												"value": "AzureSQL_Dataflow",
+												"activities": [
+													{
+														"name": "DataLakeToSQL_CDMToSQL_Dataflows",
+														"type": "ExecuteDataFlow",
+														"dependsOn": [],
+														"policy": {
+															"timeout": "1.00:00:00",
+															"retry": 2,
+															"retryIntervalInSeconds": 30,
+															"secureOutput": false,
+															"secureInput": false
+														},
+														"userProperties": [
+															{
+																"name": "EntityName",
+																"value": "@item().entityName"
+															}
+														],
+														"typeProperties": {
+															"dataflow": {
+																"referenceName": "DataLakeToSQL_CDMToSQL_Dataflows1",
+																"type": "DataFlowReference",
+																"parameters": {
+																	"SourceContainer": {
+																		"value": "'@{item().SourceContainer}'",
+																		"type": "Expression"
+																	},
+																	"ManifefastName": {
+																		"value": "'@{string(last(split(item().metadataLocation, '/')))}'",
+																		"type": "Expression"
+																	},
+																	"TableName": {
+																		"value": "'@{item().entityName}'",
+																		"type": "Expression"
+																	},
+																	"FromDateTime": {
+																		"value": "toTimestamp(left('@{variables('FromDateTime')}', 19), 'yyyy-MM-dd\\'T\\'HH:mm:ss')",
+																		"type": "Expression"
+																	},
+																	"ToDateTime": {
+																		"value": "toTimestamp(left('@{variables('ToDateTime')}', 19), 'yyyy-MM-dd\\'T\\'HH:mm:ss')",
+																		"type": "Expression"
+																	},
+																	"Schema": {
+																		"value": "'@{item().schema}'",
+																		"type": "Expression"
+																	},
+																	"DataFiles": {
+																		"value": "'@{activity('CheckForNewFiles').output.childItems}'",
+																		"type": "Expression"
+																	},
+																	"Environment": {
+																		"value": "'@{item().Environment}'",
+																		"type": "Expression"
+																	},
+																	"ManifestPath": {
+																		"value": "'@{item().metadataLocation}'",
+																		"type": "Expression"
+																	}
+																},
+																"datasetParameters": {
+																	"SourceCDMTable": {},
+																	"SQLSink": {}
+																}
+															},
+															"staging": {},
+															"compute": {
+																"coreCount": 8,
+																"computeType": "General"
+															},
+															"traceLevel": "None",
+															"cacheSinks": {
+																"firstRowOnly": true
+															}
+														}
+													}
+												]
+											},
+											{
+												"value": "DedicatedPool",
+												"activities": [
+													{
+														"name": "CopyAndMergeData",
+														"type": "Script",
+														"dependsOn": [],
+														"policy": {
+															"timeout": "7.00:00:00",
+															"retry": 2,
+															"retryIntervalInSeconds": 30,
+															"secureOutput": false,
+															"secureInput": false
+														},
+														"userProperties": [],
+														"linkedServiceName": {
+															"referenceName": "TargetSQLDB",
+															"type": "LinkedServiceReference"
+														},
+														"typeProperties": {
+															"scripts": [
+																{
+																	"type": "Query",
+																	"text": {
+																		"value": "\nDeclare @Schema nvarchar(20) = '@{item().Schema}';\nDeclare @TableName nvarchar(200) = '@{item().EntityName}';\nDeclare @ChildItems nvarchar(max)='@{activity('CheckForNewFiles').output.childItems}'; \nDeclare @ToDateTime DateTime2='@{variables('ToDateTime')}'; \n\nDeclare @DataLocation varchar(2000);\nDeclare @Incremental bit;\n\nSELECT TOP 1  \n\t@DataLocation = DataLocation,\n\t@Incremental = (CASE \t\n\tWHEN (LastCopyDateTime is  Null OR Incremental = 0 ) THEN 0\n\tELSE 1 END)\nFrom _ControlTableForCopy \nwhere \n\tTableSchema = @Schema\n\tand TableName =  @TableName\n\n-- Update status to 1- In Progress \nUpdate _ControlTableForCopy\n\tset LastCopyStatus = 1\nwhere \n\tTableSchema = @Schema\n\tand TableName =  @TableName\n\ndeclare @LastFileName nvarchar(200);\n\nSELECT \n\t@LastFileName = max(name) \nFROM Openjson(@ChildItems) \nWITH \n\t(name nvarchar(100) '$.name') \nWHERE \n\tname != 'index.json';  \n\n-- full export, create a new table from staging table schema, copy the data and then swap the object\nIF (@Incremental = 0)\nBEGIN\n\n\tdeclare @FullCopyTemplate nvarchar(max) = '\n\tIF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N''[{schema}].[_new_{TableName}]'') AND type in (N''U''))\n\tDROP TABLE [{schema}].[_new_{TableName}]\n\t\n\tCreate Table {schema}._new_{TableName} with (Distribution = Hash(RecId)) \n\tas Select top 0 * from {schema}.{TableName}\n\n\tCopy Into {schema}._new_{TableName}\n\tFrom ''{DataLocation}''\n\tWITH (\n\t\t FILE_TYPE = ''CSV'',\n\t\t CREDENTIAL = (IDENTITY = ''Managed Identity'')\n\t );\n\n\tRENAME OBJECT::{schema}.{TableName}  TO _old_{TableName};\n\tRENAME OBJECT {schema}._new_{TableName} TO {TableName};\n\tDROP TABLE {schema}._old_{TableName};\n\t\n\tUPDATE  [dbo].[_ControlTableForCopy] \n\tSET \n\t\tLastCopyDateTime =''{ToDateTime}'', \n\t\tLastCopyMarker = ''{LastFileName}'',\n\t\tLastCopyStatus = 0,\n\t\tLastCopyDuration = datediff(MINUTE, ''{ToDateTime}'', GETUTCDATE() )\n\tWHERE \n\t\tTableSchema = ''{Schema}'' \n\t\tAND TableName = ''{TableName}''  \n\n\t'\n\n\tdeclare @FullCopyStatement nvarchar(max) = replace(replace(replace(replace(replace(@FullCopyTemplate, '{Schema}', @Schema)\n\t\t\t\t\t\t\t\t\t\t\t\t\t, '{TableName}', @TableName)\n\t\t\t\t\t\t\t\t\t\t\t\t, '{DataLocation}', @DataLocation)\n\t\t\t\t\t\t\t\t\t\t\t\t, '{LastFileName}', @LastFileName) \n\t\t\t\t\t\t\t\t\t\t\t\t, '{ToDateTime}', @ToDateTime) ;\n\tPrint(@FullCopyStatement);\n\tExecute sp_executesql  @FullCopyStatement;\n\nEND \n\n-- Incremental Table Create, Copy Into, Dedplicate and Merge\nELSE\n\tBEGIN;\n\t\tDeclare @CDCDataLocation varchar(2000);\n\t\tDeclare @CDCColumnList varchar(max);\n\t\tdeclare @UpdateColumns nvarchar(max);\n\t\tdeclare @InsertColumns nvarchar(max);\n\t\tdeclare @InsertValues nvarchar(max);\n\n\n\t\tset @CDCDataLocation = concat(SubString(@DataLocation, 0, CharIndex('/Tables/', @DataLocation)) , '/ChangeFeed/', @TableName, '/*.csv')\n\n\t\tSelect \n\t\t\t@CDCColumnList = ColumnList \n\t\tfrom _sqlmetadata \n        where\n            EntityName = '_cdc_' + @TableName\n            and Environment =  (select top 1 environment from  _controltableforcopy  where TableName = @TableName and TableSchema = @Schema)\n\n\t\tSelect\n\t\t\t@UpdateColumns = STRING_AGG(CONVERT(NVARCHAR(max), 'T.' + COLUMN_NAME + ' = S.'  + COLUMN_NAME), ','),\n\t\t\t@InsertColumns = STRING_AGG(CONVERT(NVARCHAR(max), COLUMN_NAME), ',')\n\t\tFROM INFORMATION_SCHEMA.COLUMNS \n\t\tWHERE TABLE_NAME = @TableName\n\t\tand  TABLE_SCHEMA = @Schema\n\n\t\tset @UpdateColumns = replace(replace(replace(@UpdateColumns, 'S._SysRowId', 'S.RecId'),'S.LSN', 'S.Start_LSN'),',T.RecId = S.RecId','');\n\t\tset @InsertValues = replace(replace(@InsertColumns, '_SysRowId', 'RecId'), 'LSN', 'Start_LSN');\n\n\t\tdeclare @IncrementalCopyTemplate nvarchar(max) =\n\t\t'print(''Create Table : {Schema}._cdc_{TableName}'' );\n\n\t\tIF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N''[{schema}].[_cdc_{TableName}]'') AND type in (N''U''))\n\t\tDROP TABLE [{schema}].[_cdc_{TableName}]\n\n\t\tcreate table {Schema}._cdc_{TableName} ({CDCColumnList})\n\t\tWith (Distribution = Hash(RecId))\n\t\t\n\t\tprint(''Copy Into : {Schema}._cdc_{TableName} {CDCColumnList}'' );\n\t\tCopy Into {Schema}._cdc_{TableName} \n\t\t\tFrom ''{CDCDataLocation}''\n\t\t\tWITH (\n\t\t\t\t\tFILE_TYPE = ''CSV'',\n\t\t\t\t\tCREDENTIAL = (IDENTITY = ''Managed Identity'')\n\t\t\t\t)\n\t\t\n\t\tprint(''Deduplicate Data: {Schema}._cdc_{TableName}'' );\n\n\t\tDelete FROM X\n\t\tFROM \n\t\t(\n\t\t\tSELECT \n\t\t\tROW_NUMBER() OVER (PARTITION BY RECID ORDER BY Start_LSN DESC, Seq_Val DESC, DataLakeModified_DateTime DESC) AS ROWNO,\n\t\t\t*\n\t\t\tFROM {Schema}._cdc_{TableName}\n\t\t\t\n\t\t) AS X\n\t\tWHERE X.ROWNO > 1\n\t\t\n\t\tprint(''Merge Data: {Schema}._cdc_{TableName}'' );\n\n\t\tMERGE {Schema}.{TableName} T USING {Schema}._cdc_{TableName}  S\n\t\t\tON T.RECID = S.RECID\n\t\t  WHEN MATCHED and S.DML_Action <> ''DELETE''\n\t\t\tTHEN UPDATE SET \n\t\t\t\t{UpdateColumn}\n\t\t  WHEN NOT MATCHED BY TARGET and S.DML_Action <> ''DELETE''  \n\t\t\tTHEN INSERT ({InsertColumn})\n\t\t\tValues ({InsertValues})\n\t\t  WHEN MATCHED and S.DML_Action = ''DELETE''\n\t\t\t THEN DELETE;\n\n\t\tUPDATE  [dbo].[_ControlTableForCopy] \n\t\tSET \n\t\t\tLastCopyDateTime =''{ToDateTime}'', \n\t\t\tLastCopyMarker = ''{LastFileName}'',\n\t\t\tLastCopyDuration = datediff(MINUTE, ''{ToDateTime}'', GETUTCDATE() ),\n\t\t\tLastCopyStatus = 0\n\t\tWHERE \n\t\tTableSchema = ''{Schema}'' \n\t\tAND TableName = ''{TableName}''   \n\n\t\tDrop Table {Schema}._cdc_{TableName}\n\t\t'\n\n\t\tdeclare @IncrementalCopyStatement nvarchar(max) = replace(replace(replace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(@IncrementalCopyTemplate, '{Schema}', @Schema)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{TableName}', @TableName)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{CDCColumnList}', @CDCColumnList)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{CDCDataLocation}',@CDCDataLocation)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{UpdateColumn}', @UpdateColumns)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{InsertColumn}', @InsertColumns)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t,'{InsertValues}',@InsertValues)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{LastFileName}', @LastFileName) \n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{ToDateTime}', @ToDateTime) ;\n\n\t\tprint(@IncrementalCopyStatement);\n\t\tExecute sp_executesql  @IncrementalCopyStatement;\n\tEND;\n\t\n\t",
+																		"type": "Expression"
+																	}
+																}
+															],
+															"logSettings": {
+																"logDestination": "ActivityOutput"
+															}
+														}
+													}
+												]
+											},
+											{
+												"value": "AzureSQL_Serverless",
+												"activities": [
+													{
+														"name": "CopyData",
+														"type": "Copy",
+														"dependsOn": [],
+														"policy": {
+															"timeout": "0.12:00:00",
+															"retry": 0,
+															"retryIntervalInSeconds": 30,
+															"secureOutput": false,
+															"secureInput": false
+														},
+														"userProperties": [],
+														"typeProperties": {
+															"source": {
+																"type": "AzureSqlSource",
+																"queryTimeout": "02:00:00",
+																"partitionOption": "None"
+															},
+															"sink": {
+																"type": "AzureSqlSink",
+																"preCopyScript": {
+																	"value": "\tIF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[@{item().Schema}].[_new_@{item().EntityName}]') AND type in (N'U'))\n\tDROP TABLE [@{item().Schema}].[_new_@{item().EntityName}]",
+																	"type": "Expression"
+																},
+																"writeBehavior": "insert",
+																"sqlWriterUseTableLock": false,
+																"tableOption": "autoCreate",
+																"disableMetricsCollection": false
+															},
+															"enableStaging": false,
+															"translator": {
+																"type": "TabularTranslator",
+																"typeConversion": true,
+																"typeConversionSettings": {
+																	"allowDataTruncation": true,
+																	"treatBooleanAsNumber": false
+																}
+															}
+														},
+														"inputs": [
+															{
+																"referenceName": "Source_Synapse_Table1",
+																"type": "DatasetReference",
+																"parameters": {
+																	"DbServer": {
+																		"value": "@pipeline().parameters.SourceDbServer",
+																		"type": "Expression"
+																	},
+																	"DbName": {
+																		"value": "@pipeline().parameters.SourceDbName",
+																		"type": "Expression"
+																	},
+																	"Schema": {
+																		"value": "@item().Schema",
+																		"type": "Expression"
+																	},
+																	"TableName": {
+																		"value": "@item().EntityName",
+																		"type": "Expression"
+																	}
+																}
+															}
+														],
+														"outputs": [
+															{
+																"referenceName": "DestinationSQLTable1",
+																"type": "DatasetReference",
+																"parameters": {
+																	"DbServer": {
+																		"value": "@pipeline().parameters.DbServer",
+																		"type": "Expression"
+																	},
+																	"DbName": {
+																		"value": "@pipeline().parameters.DbName",
+																		"type": "Expression"
+																	},
+																	"Schema": {
+																		"value": "@pipeline().parameters.Schema",
+																		"type": "Expression"
+																	},
+																	"TableName": {
+																		"value": "_new_@{item().EntityName}",
+																		"type": "Expression"
+																	}
+																}
+															}
+														]
+													},
+													{
+														"name": "MergeData",
+														"type": "Script",
+														"dependsOn": [
+															{
+																"activity": "CopyData",
+																"dependencyConditions": [
+																	"Succeeded"
+																]
+															}
+														],
+														"policy": {
+															"timeout": "0.12:00:00",
+															"retry": 0,
+															"retryIntervalInSeconds": 30,
+															"secureOutput": false,
+															"secureInput": false
+														},
+														"userProperties": [],
+														"linkedServiceName": {
+															"referenceName": "TargetSQLDB",
+															"type": "LinkedServiceReference"
+														},
+														"typeProperties": {
+															"scripts": [
+																{
+																	"type": "NonQuery",
+																	"text": {
+																		"value": "Declare @Schema nvarchar(20) = '@{item().Schema}';\nDeclare @TableName nvarchar(200) = '@{item().EntityName}';\nDeclare @ChildItems nvarchar(max)='@{activity('CheckForNewFiles').output.childItems}'; \nDeclare @ToDateTime DateTime2='@{variables('ToDateTime')}'; \n\nDeclare @DataLocation varchar(2000);\nDeclare @Incremental bit;\n\nSELECT TOP 1  \n\t@DataLocation = DataLocation,\n\t@Incremental = (CASE \t\n\tWHEN (LastCopyDateTime is  Null OR Incremental = 0 ) THEN 0\n\tELSE 1 END)\nFrom _ControlTableForCopy \nwhere \n\tTableSchema = @Schema\n\tand TableName =  @TableName\n\n-- Update status to 1- In Progress \nUpdate _ControlTableForCopy\n\tset LastCopyStatus = 1\nwhere \n\tTableSchema = @Schema\n\tand TableName =  @TableName\n\ndeclare @LastFileName nvarchar(200);\n\nSELECT \n\t@LastFileName = max(name) \nFROM Openjson(@ChildItems) \nWITH \n\t(name nvarchar(100) '$.name') \nWHERE \n\tname != 'index.json';  \n\n-- full export, create a new table from staging table schema, copy the data and then swap the object\nIF (@Incremental = 0)\nBEGIN\n\n\tdeclare @FullCopyTemplate nvarchar(max) = '\n\tIF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N''[{schema}].[{TableName}]'') AND type in (N''U''))\n\tExec sp_rename ''{schema}.{TableName}'', ''_old_{TableName}'';\n\n\tExec sp_rename ''{schema}._new_{TableName}'', ''{TableName}'';\n\t\n\tIF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N''[{schema}].[_old_{TableName}]'') AND type in (N''U''))\n\tDROP TABLE {schema}._old_{TableName};\n\t\n\tUPDATE  [dbo].[_ControlTableForCopy] \n\tSET \n\t\tLastCopyDateTime =''{ToDateTime}'', \n\t\tLastCopyMarker = ''{LastFileName}'',\n\t\tLastCopyStatus = 0,\n\t\tLastCopyDuration = datediff(MINUTE, ''{ToDateTime}'', GETUTCDATE() )\n\tWHERE \n\t\tTableSchema = ''{Schema}'' \n\t\tAND TableName = ''{TableName}''  \n\n\t'\n\n\tdeclare @FullCopyStatement nvarchar(max) = replace(replace(replace(replace(@FullCopyTemplate, '{Schema}', @Schema)\n\t\t\t\t\t\t\t\t\t\t\t\t, '{TableName}', @TableName)\n\t\t\t\t\t\t\t\t\t\t\t\t, '{LastFileName}', @LastFileName) \n\t\t\t\t\t\t\t\t\t\t\t\t, '{ToDateTime}', @ToDateTime) ;\n\tPrint(@FullCopyStatement);\n\tExecute sp_executesql  @FullCopyStatement;\n\nEND \n\n-- Incremental Table Create, Copy Into, Dedplicate and Merge\nELSE\n\tBEGIN;\n\t\tDeclare @CDCDataLocation varchar(2000);\n\t\tDeclare @CDCColumnList varchar(max);\n\t\tdeclare @UpdateColumns nvarchar(max);\n\t\tdeclare @InsertColumns nvarchar(max);\n\t\tdeclare @InsertValues nvarchar(max);\n\n\t\tSelect \n\t\t\t@CDCColumnList = ColumnList \n\t\tfrom _sqlmetadata \n\t\twhere \n\t\t\tEntityName = '_cdc_' + @TableName;\n\n\t\tSelect\n\t\t\t@UpdateColumns = STRING_AGG(CONVERT(NVARCHAR(max), 'T.' + COLUMN_NAME + ' = S.'  + COLUMN_NAME), ','),\n\t\t\t@InsertColumns = STRING_AGG(CONVERT(NVARCHAR(max), COLUMN_NAME), ',')\n\t\tFROM INFORMATION_SCHEMA.COLUMNS \n\t\tWHERE TABLE_NAME = @TableName\n\t\tand  TABLE_SCHEMA = @Schema\n\n\t\tset @UpdateColumns = replace(replace(replace(@UpdateColumns, 'S._SysRowId', 'S.RecId'),'S.LSN', 'S.Start_LSN'),',T.RecId = S.RecId','');\n\t\tset @InsertValues = replace(replace(@InsertColumns, '_SysRowId', 'RecId'), 'LSN', 'Start_LSN');\n\n\t\tdeclare @IncrementalCopyTemplate nvarchar(max) =\n\t\t'\n\t\tDelete FROM X\n\t\tFROM \n\t\t(\n\t\t\tSELECT \n\t\t\tROW_NUMBER() OVER (PARTITION BY RECID ORDER BY Start_LSN DESC, Seq_Val DESC, DataLakeModified_DateTime DESC) AS ROWNO,\n\t\t\t*\n\t\t\tFROM {Schema}._new_{TableName}\n\t\t\t\n\t\t) AS X\n\t\tWHERE X.ROWNO > 1\n\t\t\n\t\tprint(''Merge Data: {Schema}._new_{TableName}'' );\n\n\t\tMERGE {Schema}.{TableName} T USING {Schema}._new_{TableName}  S\n\t\t\tON T.RECID = S.RECID\n\t\t  WHEN MATCHED and S.DML_Action <> ''DELETE''\n\t\t\tTHEN UPDATE SET \n\t\t\t\t{UpdateColumn}\n\t\t  WHEN NOT MATCHED BY TARGET and S.DML_Action <> ''DELETE''  \n\t\t\tTHEN INSERT ({InsertColumn})\n\t\t\tValues ({InsertValues})\n\t\t  WHEN MATCHED and S.DML_Action = ''DELETE''\n\t\t\t THEN DELETE;\n\n\t\tUPDATE  [dbo].[_ControlTableForCopy] \n\t\tSET \n\t\t\tLastCopyDateTime =''{ToDateTime}'', \n\t\t\tLastCopyMarker = ''{LastFileName}'',\n\t\t\tLastCopyDuration = datediff(MINUTE, ''{ToDateTime}'', GETUTCDATE() ),\n\t\t\tLastCopyStatus = 0\n\t\tWHERE \n\t\tTableSchema = ''{Schema}'' \n\t\tAND TableName = ''{TableName}''   \n\n\t\tDrop Table {Schema}._new_{TableName}\n\t\t'\n\n\t\tdeclare @IncrementalCopyStatement nvarchar(max) = replace(replace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(@IncrementalCopyTemplate, '{Schema}', @Schema)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{TableName}', @TableName)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{CDCColumnList}', @CDCColumnList)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{UpdateColumn}', @UpdateColumns)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{InsertColumn}', @InsertColumns)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t,'{InsertValues}',@InsertValues)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{LastFileName}', @LastFileName) \n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{ToDateTime}', @ToDateTime) ;\n\n\t\tprint(@IncrementalCopyStatement);\n\t\tExecute sp_executesql  @IncrementalCopyStatement;\n\tEND;\n\t\n\t",
+																		"type": "Expression"
+																	}
+																}
+															],
+															"scriptBlockExecutionTimeout": "02:00:00"
+														}
+													}
+												]
+											}
+										],
+										"defaultActivities": [
+											{
+												"name": "UpdateLastCopyDateTime",
+												"type": "Script",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"linkedServiceName": {
+													"referenceName": "TargetSQLDB",
+													"type": "LinkedServiceReference"
+												},
+												"typeProperties": {
+													"scripts": [
+														{
+															"type": "NonQuery",
+															"text": {
+																"value": "Declare @ToDateTime DateTime2='@{variables('ToDateTime')}'; \n\nupdate _ControlTableForCopy \nset LastCopyDateTime = @ToDateTime\nwhere \nTableSchema = '@{item().Schema}'\nand TableName = '@{item().EntityName}'",
+																"type": "Expression"
+															}
+														}
+													]
+												}
+											}
+										]
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "GetControlTable",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "SELECT \n TableSchema as [Schema]\n, StorageAccount\n, TableName as EntityName \n, Container as SourceContainer\n, Environment as Environment\n, case \n\twhen LastCopyDateTime is  Null OR Incremental = 0 \n\t\tThen replace(DataPath, '/*.csv', '')  \n\tElse \n\t\t  concat ('/ChangeFeed/', TableName)\n  end as DataLocation\n, case \n\twhen LastCopyDateTime is  Null or Incremental = 0 \n\t\tThen left(DataPath, len(DataPath) - len(TableName) - 7)  \n\tElse \n\t\t  '/ChangeFeed'\n  end as MetadataLocation\n,LastCopyDateTime\n,LastCopyMarker \nFROM [dbo].[_ControlTableForCopy]\nwhere Active = 1\nand (LastCopyDateTime  is null OR datediff(MINUTE, LastCopyDateTime, GETUTCDATE()) > RefreshInterval) \nand TableSchema = '@{pipeline().parameters.Schema}'\nand ('@{pipeline().parameters.TableNames}' = '*' OR TableName  in (select value from string_split('@{pipeline().parameters.TableNames}', ',')))\n",
+									"type": "Expression"
+								},
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "DataLakeToSQL_TargetDB_SQLQuery_Dataset1",
+								"type": "DatasetReference",
+								"parameters": {
+									"DbServer": {
+										"value": "@pipeline().parameters.DbServer",
+										"type": "Expression"
+									},
+									"DbName": {
+										"value": "@pipeline().parameters.DbName",
+										"type": "Expression"
+									}
+								}
+							},
+							"firstRowOnly": false
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {},
+					"cancelAfter": {}
+				},
+				"parameters": {
+					"Schema": {
+						"type": "string",
+						"defaultValue": "dbo"
+					},
+					"TableNames": {
+						"type": "string",
+						"defaultValue": "InventTable"
+					},
+					"DbServer": {
+						"type": "string",
+						"defaultValue": "techdeliverydatalake.database.windows.net"
+					},
+					"DbName": {
+						"type": "string",
+						"defaultValue": "pipeline-target"
+					},
+					"SourceDbServer": {
+						"type": "string",
+						"defaultValue": "techdeliverydatalaketesting-ondemand.sql.azuresynapse.net"
+					},
+					"SourceDbName": {
+						"type": "string",
+						"defaultValue": "fno2"
+					}
+				},
+				"variables": {
+					"FromDateTime": {
+						"type": "String",
+						"defaultValue": "1900-01-01T00:00:00Z"
+					},
+					"ToDateTime": {
+						"type": "String",
+						"defaultValue": "9999-12-31T00:00:00Z"
+					}
+				},
+				"folder": {
+					"name": "DataLakeToSQLCopy"
+				},
+				"annotations": [],
+				"lastPublishTime": "2022-12-09T20:08:43Z"
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/datasets/DataLakeToSQL_TargetDB_SQLQuery_Dataset1')]",
+				"[concat(variables('workspaceId'), '/datasets/DataLakeToSQL_CSV_File_Dataset11')]",
+				"[concat(variables('workspaceId'), '/linkedServices/TargetSQLDB')]",
+				"[concat(variables('workspaceId'), '/dataflows/DataLakeToSQL_CDMToSQL_Dataflows1')]",
+				"[concat(variables('workspaceId'), '/datasets/Source_Synapse_Table1')]",
+				"[concat(variables('workspaceId'), '/datasets/DestinationSQLTable1')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/DataLakeToSQLCopy_old')]",
+			"type": "Microsoft.Synapse/workspaces/pipelines",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"activities": [
+					{
+						"name": "ForEachTables",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "GetControlTable",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('GetControlTable').output.value",
+								"type": "Expression"
+							},
+							"activities": [
+								{
+									"name": "SetFromDateTime",
+									"type": "SetVariable",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "FromDateTime",
+										"value": {
+											"value": "@item().LastCopyDateTime",
+											"type": "Expression"
+										}
+									}
+								},
+								{
+									"name": "SetToDateTime",
+									"type": "SetVariable",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "ToDateTime",
+										"value": {
+											"value": "@utcnow()",
+											"type": "Expression"
+										}
+									}
+								},
+								{
+									"name": "CheckForNewFiles",
+									"type": "GetMetadata",
+									"dependsOn": [
+										{
+											"activity": "SetToDateTime",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										},
+										{
+											"activity": "SetFromDateTime",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [
+										{
+											"name": "TABLE_NAME",
+											"value": "@item().dataLocation"
+										}
+									],
+									"typeProperties": {
+										"dataset": {
+											"referenceName": "DataLakeToSQL_CSV_File_Dataset1",
+											"type": "DatasetReference",
+											"parameters": {
+												"Container": {
+													"value": "@item().SourceContainer",
+													"type": "Expression"
+												},
+												"Folder": {
+													"value": "@concat(item().Environment,'/', item().DataLocation)",
+													"type": "Expression"
+												},
+												"StorageAccount": {
+													"value": "@item().StorageAccount",
+													"type": "Expression"
+												}
+											}
+										},
+										"fieldList": [
+											"childItems"
+										],
+										"storeSettings": {
+											"type": "AzureBlobFSReadSettings",
+											"recursive": true,
+											"modifiedDatetimeStart": {
+												"value": "@variables('FromDateTime')",
+												"type": "Expression"
+											},
+											"modifiedDatetimeEnd": {
+												"value": "@variables('ToDateTime')",
+												"type": "Expression"
+											},
+											"enablePartitionDiscovery": false
+										},
+										"formatSettings": {
+											"type": "DelimitedTextReadSettings"
+										}
+									}
+								},
+								{
+									"name": "ArchiveChangeFeed",
+									"type": "IfCondition",
+									"dependsOn": [
+										{
+											"activity": "CopyAndMerge",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"expression": {
+											"value": "@and(startswith(item().DataLocation,'/ChangeFeed'),greater(length(activity('CheckForNewFiles').output.childItems),1))",
+											"type": "Expression"
+										},
+										"ifTrueActivities": [
+											{
+												"name": "DeleteFiles",
+												"type": "Delete",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"dataset": {
+														"referenceName": "DataLakeToSQL_CSV_File_Dataset1",
+														"type": "DatasetReference",
+														"parameters": {
+															"Container": {
+																"value": "@item().SourceContainer",
+																"type": "Expression"
+															},
+															"Folder": {
+																"value": "@concat(item().Environment,item().DataLocation)",
+																"type": "Expression"
+															},
+															"StorageAccount": {
+																"value": "@item().StorageAccount",
+																"type": "Expression"
+															}
+														}
+													},
+													"enableLogging": false,
+													"storeSettings": {
+														"type": "AzureBlobFSReadSettings",
+														"recursive": false,
+														"modifiedDatetimeEnd": {
+															"value": "@variables('ToDateTime')",
+															"type": "Expression"
+														},
+														"wildcardFileName": "*.csv",
+														"enablePartitionDiscovery": false
+													}
+												}
+											}
+										]
+									}
+								},
+								{
+									"name": "CopyAndMerge",
+									"type": "Switch",
+									"dependsOn": [
+										{
+											"activity": "CheckForNewFiles",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"on": {
+											"value": "@if(lessOrEquals(length(activity('CheckForNewFiles').output.childItems),1),'Default', \nif(endswith(pipeline().parameters.DbServer, '.sql.azuresynapse.net'), 'DedicatedPool',\nif(and(equals(pipeline().parameters.SourceDbServer, null),endswith(pipeline().parameters.DbServer, '.database.windows.net')), 'AzureSQL_Dataflow', \nif(and(not(equals(pipeline().parameters.SourceDbServer, null)), endswith(pipeline().parameters.DbServer, '.database.windows.net')), 'AzureSQL_Serverless'\n,'Default' ))))",
+											"type": "Expression"
+										},
+										"cases": [
+											{
+												"value": "AzureSQL_Dataflow",
+												"activities": [
+													{
+														"name": "DataLakeToSQL_CDMToSQL_Dataflows",
+														"type": "ExecuteDataFlow",
+														"dependsOn": [],
+														"policy": {
+															"timeout": "1.00:00:00",
+															"retry": 2,
+															"retryIntervalInSeconds": 30,
+															"secureOutput": false,
+															"secureInput": false
+														},
+														"userProperties": [
+															{
+																"name": "EntityName",
+																"value": "@item().entityName"
+															}
+														],
+														"typeProperties": {
+															"staging": {},
+															"compute": {
+																"coreCount": 8,
+																"computeType": "General"
+															},
+															"traceLevel": "None",
+															"cacheSinks": {
+																"firstRowOnly": true
+															}
+														}
+													}
+												]
+											},
+											{
+												"value": "DedicatedPool",
+												"activities": [
+													{
+														"name": "CopyAndMergeData",
+														"type": "Script",
+														"dependsOn": [],
+														"policy": {
+															"timeout": "7.00:00:00",
+															"retry": 2,
+															"retryIntervalInSeconds": 30,
+															"secureOutput": false,
+															"secureInput": false
+														},
+														"userProperties": [],
+														"linkedServiceName": {
+															"referenceName": "TargetSQLDB",
+															"type": "LinkedServiceReference"
+														},
+														"typeProperties": {
+															"scripts": [
+																{
+																	"type": "Query",
+																	"text": {
+																		"value": "\nDeclare @Schema nvarchar(20) = '@{item().Schema}';\nDeclare @TableName nvarchar(200) = '@{item().EntityName}';\nDeclare @ChildItems nvarchar(max)='@{activity('CheckForNewFiles').output.childItems}'; \nDeclare @ToDateTime DateTime2='@{variables('ToDateTime')}'; \n\nDeclare @DataLocation varchar(2000);\nDeclare @Incremental bit;\n\nSELECT TOP 1  \n\t@DataLocation = DataLocation,\n\t@Incremental = (CASE \t\n\tWHEN (LastCopyDateTime is  Null OR Incremental = 0 ) THEN 0\n\tELSE 1 END)\nFrom _ControlTableForCopy \nwhere \n\tTableSchema = @Schema\n\tand TableName =  @TableName\n\n-- Update status to 1- In Progress \nUpdate _ControlTableForCopy\n\tset LastCopyStatus = 1\nwhere \n\tTableSchema = @Schema\n\tand TableName =  @TableName\n\ndeclare @LastFileName nvarchar(200);\n\nSELECT \n\t@LastFileName = max(name) \nFROM Openjson(@ChildItems) \nWITH \n\t(name nvarchar(100) '$.name') \nWHERE \n\tname != 'index.json';  \n\n-- full export, create a new table from staging table schema, copy the data and then swap the object\nIF (@Incremental = 0)\nBEGIN\n\n\tdeclare @FullCopyTemplate nvarchar(max) = '\n\tIF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N''[{schema}].[_new_{TableName}]'') AND type in (N''U''))\n\tDROP TABLE [{schema}].[_new_{TableName}]\n\t\n\tCreate Table {schema}._new_{TableName} with (Distribution = Hash(RecId)) \n\tas Select top 0 * from {schema}.{TableName}\n\n\tCopy Into {schema}._new_{TableName}\n\tFrom ''{DataLocation}''\n\tWITH (\n\t\t FILE_TYPE = ''CSV'',\n\t\t CREDENTIAL = (IDENTITY = ''Managed Identity'')\n\t );\n\n\tRENAME OBJECT::{schema}.{TableName}  TO _old_{TableName};\n\tRENAME OBJECT {schema}._new_{TableName} TO {TableName};\n\tDROP TABLE {schema}._old_{TableName};\n\t\n\tUPDATE  [dbo].[_ControlTableForCopy] \n\tSET \n\t\tLastCopyDateTime =''{ToDateTime}'', \n\t\tLastCopyMarker = ''{LastFileName}'',\n\t\tLastCopyStatus = 0,\n\t\tLastCopyDuration = datediff(MINUTE, ''{ToDateTime}'', GETUTCDATE() )\n\tWHERE \n\t\tTableSchema = ''{Schema}'' \n\t\tAND TableName = ''{TableName}''  \n\n\t'\n\n\tdeclare @FullCopyStatement nvarchar(max) = replace(replace(replace(replace(replace(@FullCopyTemplate, '{Schema}', @Schema)\n\t\t\t\t\t\t\t\t\t\t\t\t\t, '{TableName}', @TableName)\n\t\t\t\t\t\t\t\t\t\t\t\t, '{DataLocation}', @DataLocation)\n\t\t\t\t\t\t\t\t\t\t\t\t, '{LastFileName}', @LastFileName) \n\t\t\t\t\t\t\t\t\t\t\t\t, '{ToDateTime}', @ToDateTime) ;\n\tPrint(@FullCopyStatement);\n\tExecute sp_executesql  @FullCopyStatement;\n\nEND \n\n-- Incremental Table Create, Copy Into, Dedplicate and Merge\nELSE\n\tBEGIN;\n\t\tDeclare @CDCDataLocation varchar(2000);\n\t\tDeclare @CDCColumnList varchar(max);\n\t\tdeclare @UpdateColumns nvarchar(max);\n\t\tdeclare @InsertColumns nvarchar(max);\n\t\tdeclare @InsertValues nvarchar(max);\n\n\n\t\tset @CDCDataLocation = concat(SubString(@DataLocation, 0, CharIndex('/Tables/', @DataLocation)) , '/ChangeFeed/', @TableName, '/*.csv')\n\n\t\tSelect \n\t\t\t@CDCColumnList = ColumnList \n\t\tfrom _sqlmetadata \n        where\n            EntityName = '_cdc_' + @TableName\n            and Environment =  (select top 1 environment from  _controltableforcopy  where TableName = @TableName and TableSchema = @Schema)\n\n\t\tSelect\n\t\t\t@UpdateColumns = STRING_AGG(CONVERT(NVARCHAR(max), 'T.' + COLUMN_NAME + ' = S.'  + COLUMN_NAME), ','),\n\t\t\t@InsertColumns = STRING_AGG(CONVERT(NVARCHAR(max), COLUMN_NAME), ',')\n\t\tFROM INFORMATION_SCHEMA.COLUMNS \n\t\tWHERE TABLE_NAME = @TableName\n\t\tand  TABLE_SCHEMA = @Schema\n\n\t\tset @UpdateColumns = replace(replace(replace(@UpdateColumns, 'S._SysRowId', 'S.RecId'),'S.LSN', 'S.Start_LSN'),',T.RecId = S.RecId','');\n\t\tset @InsertValues = replace(replace(@InsertColumns, '_SysRowId', 'RecId'), 'LSN', 'Start_LSN');\n\n\t\tdeclare @IncrementalCopyTemplate nvarchar(max) =\n\t\t'print(''Create Table : {Schema}._cdc_{TableName}'' );\n\n\t\tIF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N''[{schema}].[_cdc_{TableName}]'') AND type in (N''U''))\n\t\tDROP TABLE [{schema}].[_cdc_{TableName}]\n\n\t\tcreate table {Schema}._cdc_{TableName} ({CDCColumnList})\n\t\tWith (Distribution = Hash(RecId))\n\t\t\n\t\tprint(''Copy Into : {Schema}._cdc_{TableName} {CDCColumnList}'' );\n\t\tCopy Into {Schema}._cdc_{TableName} \n\t\t\tFrom ''{CDCDataLocation}''\n\t\t\tWITH (\n\t\t\t\t\tFILE_TYPE = ''CSV'',\n\t\t\t\t\tCREDENTIAL = (IDENTITY = ''Managed Identity'')\n\t\t\t\t)\n\t\t\n\t\tprint(''Deduplicate Data: {Schema}._cdc_{TableName}'' );\n\n\t\tDelete FROM X\n\t\tFROM \n\t\t(\n\t\t\tSELECT \n\t\t\tROW_NUMBER() OVER (PARTITION BY RECID ORDER BY Start_LSN DESC, Seq_Val DESC, DataLakeModified_DateTime DESC) AS ROWNO,\n\t\t\t*\n\t\t\tFROM {Schema}._cdc_{TableName}\n\t\t\t\n\t\t) AS X\n\t\tWHERE X.ROWNO > 1\n\t\t\n\t\tprint(''Merge Data: {Schema}._cdc_{TableName}'' );\n\n\t\tMERGE {Schema}.{TableName} T USING {Schema}._cdc_{TableName}  S\n\t\t\tON T.RECID = S.RECID\n\t\t  WHEN MATCHED and S.DML_Action <> ''DELETE''\n\t\t\tTHEN UPDATE SET \n\t\t\t\t{UpdateColumn}\n\t\t  WHEN NOT MATCHED BY TARGET and S.DML_Action <> ''DELETE''  \n\t\t\tTHEN INSERT ({InsertColumn})\n\t\t\tValues ({InsertValues})\n\t\t  WHEN MATCHED and S.DML_Action = ''DELETE''\n\t\t\t THEN DELETE;\n\n\t\tUPDATE  [dbo].[_ControlTableForCopy] \n\t\tSET \n\t\t\tLastCopyDateTime =''{ToDateTime}'', \n\t\t\tLastCopyMarker = ''{LastFileName}'',\n\t\t\tLastCopyDuration = datediff(MINUTE, ''{ToDateTime}'', GETUTCDATE() ),\n\t\t\tLastCopyStatus = 0\n\t\tWHERE \n\t\tTableSchema = ''{Schema}'' \n\t\tAND TableName = ''{TableName}''   \n\n\t\tDrop Table {Schema}._cdc_{TableName}\n\t\t'\n\n\t\tdeclare @IncrementalCopyStatement nvarchar(max) = replace(replace(replace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(@IncrementalCopyTemplate, '{Schema}', @Schema)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{TableName}', @TableName)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{CDCColumnList}', @CDCColumnList)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{CDCDataLocation}',@CDCDataLocation)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{UpdateColumn}', @UpdateColumns)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{InsertColumn}', @InsertColumns)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t,'{InsertValues}',@InsertValues)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{LastFileName}', @LastFileName) \n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{ToDateTime}', @ToDateTime) ;\n\n\t\tprint(@IncrementalCopyStatement);\n\t\tExecute sp_executesql  @IncrementalCopyStatement;\n\tEND;\n\t\n\t",
+																		"type": "Expression"
+																	}
+																}
+															],
+															"logSettings": {
+																"logDestination": "ActivityOutput"
+															}
+														}
+													}
+												]
+											},
+											{
+												"value": "AzureSQL_Serverless",
+												"activities": [
+													{
+														"name": "CopyData",
+														"type": "Copy",
+														"dependsOn": [],
+														"policy": {
+															"timeout": "0.12:00:00",
+															"retry": 0,
+															"retryIntervalInSeconds": 30,
+															"secureOutput": false,
+															"secureInput": false
+														},
+														"userProperties": [],
+														"typeProperties": {
+															"source": {
+																"type": "AzureSqlSource",
+																"queryTimeout": "02:00:00",
+																"partitionOption": "None"
+															},
+															"sink": {
+																"type": "AzureSqlSink",
+																"preCopyScript": {
+																	"value": "\tIF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[@{item().Schema}].[_new_@{item().EntityName}]') AND type in (N'U'))\n\tDROP TABLE [@{item().Schema}].[_new_@{item().EntityName}]",
+																	"type": "Expression"
+																},
+																"writeBehavior": "insert",
+																"sqlWriterUseTableLock": false,
+																"tableOption": "autoCreate",
+																"disableMetricsCollection": false
+															},
+															"enableStaging": false,
+															"translator": {
+																"type": "TabularTranslator",
+																"typeConversion": true,
+																"typeConversionSettings": {
+																	"allowDataTruncation": true,
+																	"treatBooleanAsNumber": false
+																}
+															}
+														},
+														"inputs": [
+															{
+																"referenceName": "Source_Synapse_Table",
+																"type": "DatasetReference",
+																"parameters": {
+																	"DbServer": {
+																		"value": "@pipeline().parameters.SourceDbServer",
+																		"type": "Expression"
+																	},
+																	"DbName": {
+																		"value": "@pipeline().parameters.SourceDbName",
+																		"type": "Expression"
+																	},
+																	"Schema": {
+																		"value": "@item().Schema",
+																		"type": "Expression"
+																	},
+																	"TableName": {
+																		"value": "@item().EntityName",
+																		"type": "Expression"
+																	}
+																}
+															}
+														],
+														"outputs": [
+															{
+																"referenceName": "DestinationSQLTable",
+																"type": "DatasetReference",
+																"parameters": {
+																	"DbServer": {
+																		"value": "@pipeline().parameters.DbServer",
+																		"type": "Expression"
+																	},
+																	"DbName": {
+																		"value": "@pipeline().parameters.DbName",
+																		"type": "Expression"
+																	},
+																	"Schema": {
+																		"value": "@pipeline().parameters.Schema",
+																		"type": "Expression"
+																	},
+																	"TableName": {
+																		"value": "_new_@{item().EntityName}",
+																		"type": "Expression"
+																	}
+																}
+															}
+														]
+													},
+													{
+														"name": "MergeData",
+														"type": "Script",
+														"dependsOn": [
+															{
+																"activity": "CopyData",
+																"dependencyConditions": [
+																	"Succeeded"
+																]
+															}
+														],
+														"policy": {
+															"timeout": "0.12:00:00",
+															"retry": 0,
+															"retryIntervalInSeconds": 30,
+															"secureOutput": false,
+															"secureInput": false
+														},
+														"userProperties": [],
+														"linkedServiceName": {
+															"referenceName": "TargetSQLDB",
+															"type": "LinkedServiceReference"
+														},
+														"typeProperties": {
+															"scripts": [
+																{
+																	"type": "NonQuery",
+																	"text": {
+																		"value": "Declare @Schema nvarchar(20) = '@{item().Schema}';\nDeclare @TableName nvarchar(200) = '@{item().EntityName}';\nDeclare @ChildItems nvarchar(max)='@{activity('CheckForNewFiles').output.childItems}'; \nDeclare @ToDateTime DateTime2='@{variables('ToDateTime')}'; \n\nDeclare @DataLocation varchar(2000);\nDeclare @Incremental bit;\n\nSELECT TOP 1  \n\t@DataLocation = DataLocation,\n\t@Incremental = (CASE \t\n\tWHEN (LastCopyDateTime is  Null OR Incremental = 0 ) THEN 0\n\tELSE 1 END)\nFrom _ControlTableForCopy \nwhere \n\tTableSchema = @Schema\n\tand TableName =  @TableName\n\n-- Update status to 1- In Progress \nUpdate _ControlTableForCopy\n\tset LastCopyStatus = 1\nwhere \n\tTableSchema = @Schema\n\tand TableName =  @TableName\n\ndeclare @LastFileName nvarchar(200);\n\nSELECT \n\t@LastFileName = max(name) \nFROM Openjson(@ChildItems) \nWITH \n\t(name nvarchar(100) '$.name') \nWHERE \n\tname != 'index.json';  \n\n-- full export, create a new table from staging table schema, copy the data and then swap the object\nIF (@Incremental = 0)\nBEGIN\n\n\tdeclare @FullCopyTemplate nvarchar(max) = '\n\tIF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N''[{schema}].[{TableName}]'') AND type in (N''U''))\n\tExec sp_rename ''{schema}.{TableName}'', ''_old_{TableName}'';\n\n\tExec sp_rename ''{schema}._new_{TableName}'', ''{TableName}'';\n\t\n\tIF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N''[{schema}].[_old_{TableName}]'') AND type in (N''U''))\n\tDROP TABLE {schema}._old_{TableName};\n\t\n\tUPDATE  [dbo].[_ControlTableForCopy] \n\tSET \n\t\tLastCopyDateTime =''{ToDateTime}'', \n\t\tLastCopyMarker = ''{LastFileName}'',\n\t\tLastCopyStatus = 0,\n\t\tLastCopyDuration = datediff(MINUTE, ''{ToDateTime}'', GETUTCDATE() )\n\tWHERE \n\t\tTableSchema = ''{Schema}'' \n\t\tAND TableName = ''{TableName}''  \n\n\t'\n\n\tdeclare @FullCopyStatement nvarchar(max) = replace(replace(replace(replace(@FullCopyTemplate, '{Schema}', @Schema)\n\t\t\t\t\t\t\t\t\t\t\t\t, '{TableName}', @TableName)\n\t\t\t\t\t\t\t\t\t\t\t\t, '{LastFileName}', @LastFileName) \n\t\t\t\t\t\t\t\t\t\t\t\t, '{ToDateTime}', @ToDateTime) ;\n\tPrint(@FullCopyStatement);\n\tExecute sp_executesql  @FullCopyStatement;\n\nEND \n\n-- Incremental Table Create, Copy Into, Dedplicate and Merge\nELSE\n\tBEGIN;\n\t\tDeclare @CDCDataLocation varchar(2000);\n\t\tDeclare @CDCColumnList varchar(max);\n\t\tdeclare @UpdateColumns nvarchar(max);\n\t\tdeclare @InsertColumns nvarchar(max);\n\t\tdeclare @InsertValues nvarchar(max);\n\n\t\tSelect \n\t\t\t@CDCColumnList = ColumnList \n\t\tfrom _sqlmetadata \n\t\twhere \n\t\t\tEntityName = '_cdc_' + @TableName;\n\n\t\tSelect\n\t\t\t@UpdateColumns = STRING_AGG(CONVERT(NVARCHAR(max), 'T.' + COLUMN_NAME + ' = S.'  + COLUMN_NAME), ','),\n\t\t\t@InsertColumns = STRING_AGG(CONVERT(NVARCHAR(max), COLUMN_NAME), ',')\n\t\tFROM INFORMATION_SCHEMA.COLUMNS \n\t\tWHERE TABLE_NAME = @TableName\n\t\tand  TABLE_SCHEMA = @Schema\n\n\t\tset @UpdateColumns = replace(replace(replace(@UpdateColumns, 'S._SysRowId', 'S.RecId'),'S.LSN', 'S.Start_LSN'),',T.RecId = S.RecId','');\n\t\tset @InsertValues = replace(replace(@InsertColumns, '_SysRowId', 'RecId'), 'LSN', 'Start_LSN');\n\n\t\tdeclare @IncrementalCopyTemplate nvarchar(max) =\n\t\t'\n\t\tDelete FROM X\n\t\tFROM \n\t\t(\n\t\t\tSELECT \n\t\t\tROW_NUMBER() OVER (PARTITION BY RECID ORDER BY Start_LSN DESC, Seq_Val DESC, DataLakeModified_DateTime DESC) AS ROWNO,\n\t\t\t*\n\t\t\tFROM {Schema}._new_{TableName}\n\t\t\t\n\t\t) AS X\n\t\tWHERE X.ROWNO > 1\n\t\t\n\t\tprint(''Merge Data: {Schema}._new_{TableName}'' );\n\n\t\tMERGE {Schema}.{TableName} T USING {Schema}._new_{TableName}  S\n\t\t\tON T.RECID = S.RECID\n\t\t  WHEN MATCHED and S.DML_Action <> ''DELETE''\n\t\t\tTHEN UPDATE SET \n\t\t\t\t{UpdateColumn}\n\t\t  WHEN NOT MATCHED BY TARGET and S.DML_Action <> ''DELETE''  \n\t\t\tTHEN INSERT ({InsertColumn})\n\t\t\tValues ({InsertValues})\n\t\t  WHEN MATCHED and S.DML_Action = ''DELETE''\n\t\t\t THEN DELETE;\n\n\t\tUPDATE  [dbo].[_ControlTableForCopy] \n\t\tSET \n\t\t\tLastCopyDateTime =''{ToDateTime}'', \n\t\t\tLastCopyMarker = ''{LastFileName}'',\n\t\t\tLastCopyDuration = datediff(MINUTE, ''{ToDateTime}'', GETUTCDATE() ),\n\t\t\tLastCopyStatus = 0\n\t\tWHERE \n\t\tTableSchema = ''{Schema}'' \n\t\tAND TableName = ''{TableName}''   \n\n\t\tDrop Table {Schema}._new_{TableName}\n\t\t'\n\n\t\tdeclare @IncrementalCopyStatement nvarchar(max) = replace(replace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(@IncrementalCopyTemplate, '{Schema}', @Schema)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{TableName}', @TableName)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{CDCColumnList}', @CDCColumnList)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{UpdateColumn}', @UpdateColumns)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{InsertColumn}', @InsertColumns)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t,'{InsertValues}',@InsertValues)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{LastFileName}', @LastFileName) \n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{ToDateTime}', @ToDateTime) ;\n\n\t\tprint(@IncrementalCopyStatement);\n\t\tExecute sp_executesql  @IncrementalCopyStatement;\n\tEND;\n\t\n\t",
+																		"type": "Expression"
+																	}
+																}
+															],
+															"scriptBlockExecutionTimeout": "02:00:00"
+														}
+													}
+												]
+											}
+										],
+										"defaultActivities": [
+											{
+												"name": "UpdateLastCopyDateTime",
+												"type": "Script",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"linkedServiceName": {
+													"referenceName": "TargetSQLDB",
+													"type": "LinkedServiceReference"
+												},
+												"typeProperties": {
+													"scripts": [
+														{
+															"type": "NonQuery",
+															"text": {
+																"value": "Declare @ToDateTime DateTime2='@{variables('ToDateTime')}'; \n\nupdate _ControlTableForCopy \nset LastCopyDateTime = @ToDateTime\nwhere \nTableSchema = '@{item().Schema}'\nand TableName = '@{item().EntityName}'",
+																"type": "Expression"
+															}
+														}
+													]
+												}
+											}
+										]
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "GetControlTable",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"firstRowOnly": false
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {},
+					"cancelAfter": {}
+				},
+				"parameters": {
+					"Schema": {
+						"type": "string",
+						"defaultValue": "dbo"
+					},
+					"TableNames": {
+						"type": "string",
+						"defaultValue": "InventTable"
+					},
+					"DbServer": {
+						"type": "string",
+						"defaultValue": "techdeliverydatalake.database.windows.net.database.windows.netBServer"
+					},
+					"DbName": {
+						"type": "string",
+						"defaultValue": "pipeline-target"
+					},
+					"SourceDbServer": {
+						"type": "string",
+						"defaultValue": "techdeliverydatalaketesting-ondemand.sql.azuresynapse.net"
+					},
+					"SourceDbName": {
+						"type": "string",
+						"defaultValue": "fno2"
+					}
+				},
+				"variables": {
+					"FromDateTime": {
+						"type": "String",
+						"defaultValue": "1900-01-01T00:00:00Z"
+					},
+					"ToDateTime": {
+						"type": "String",
+						"defaultValue": "9999-12-31T00:00:00Z"
+					}
+				},
+				"folder": {
+					"name": "DataLakeToSQLCopy"
+				},
+				"annotations": [],
+				"lastPublishTime": "2022-12-09T20:08:43Z"
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/datasets/DataLakeToSQL_CSV_File_Dataset1')]",
+				"[concat(variables('workspaceId'), '/linkedServices/TargetSQLDB')]",
+				"[concat(variables('workspaceId'), '/datasets/Source_Synapse_Table')]",
+				"[concat(variables('workspaceId'), '/datasets/DestinationSQLTable')]"
+			]
+		},
 		{
 			"name": "[concat(parameters('workspaceName'), '/AzureSqlQuery')]",
 			"type": "Microsoft.Synapse/workspaces/datasets",
@@ -641,6 +1728,202 @@
 			]
 		},
 		{
+			"name": "[concat(parameters('workspaceName'), '/DataLakeToSQL_CSV_File_Dataset1')]",
+			"type": "Microsoft.Synapse/workspaces/datasets",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "SourceDataLake",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"Container": {
+						"type": "string"
+					},
+					"Folder": {
+						"type": "string"
+					},
+					"StorageAccount": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"folderPath": {
+							"value": "@dataset().Folder",
+							"type": "Expression"
+						},
+						"fileSystem": {
+							"value": "@dataset().Container",
+							"type": "Expression"
+						}
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/linkedServices/SourceDataLake')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/DataLakeToSQL_CSV_File_Dataset11')]",
+			"type": "Microsoft.Synapse/workspaces/datasets",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "SourceDataLake",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"Container": {
+						"type": "string"
+					},
+					"Folder": {
+						"type": "string"
+					},
+					"StorageAccount": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"folderPath": {
+							"value": "@dataset().Folder",
+							"type": "Expression"
+						},
+						"fileSystem": {
+							"value": "@dataset().Container",
+							"type": "Expression"
+						}
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/linkedServices/SourceDataLake')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/DataLakeToSQL_TargetDB_SQLQuery_Dataset1')]",
+			"type": "Microsoft.Synapse/workspaces/datasets",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "TargetSQLDB",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"DbServer": {
+						"type": "string"
+					},
+					"DbName": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [],
+				"typeProperties": {}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/linkedServices/TargetSQLDB')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/DestinationSQLTable')]",
+			"type": "Microsoft.Synapse/workspaces/datasets",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "TargetSQLDB",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"DbServer": {
+						"type": "string"
+					},
+					"DbName": {
+						"type": "string"
+					},
+					"Schema": {
+						"type": "string"
+					},
+					"TableName": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [],
+				"typeProperties": {
+					"schema": {
+						"value": "@dataset().Schema",
+						"type": "Expression"
+					},
+					"table": {
+						"value": "@dataset().TableName",
+						"type": "Expression"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/linkedServices/TargetSQLDB')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/DestinationSQLTable1')]",
+			"type": "Microsoft.Synapse/workspaces/datasets",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "TargetSQLDB",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"DbServer": {
+						"type": "string"
+					},
+					"DbName": {
+						"type": "string"
+					},
+					"Schema": {
+						"type": "string"
+					},
+					"TableName": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [],
+				"typeProperties": {
+					"schema": {
+						"value": "@dataset().Schema",
+						"type": "Expression"
+					},
+					"table": {
+						"value": "@dataset().TableName",
+						"type": "Expression"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/linkedServices/TargetSQLDB')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('workspaceName'), '/ParquetInputFile')]",
 			"type": "Microsoft.Synapse/workspaces/datasets",
 			"apiVersion": "2019-06-01-preview",
@@ -823,6 +2106,88 @@
 			]
 		},
 		{
+			"name": "[concat(parameters('workspaceName'), '/Source_Synapse_Table')]",
+			"type": "Microsoft.Synapse/workspaces/datasets",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "SynapseDB",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"DbServer": {
+						"type": "string"
+					},
+					"DbName": {
+						"type": "string"
+					},
+					"Schema": {
+						"type": "string"
+					},
+					"TableName": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [],
+				"typeProperties": {
+					"schema": {
+						"value": "@dataset().Schema",
+						"type": "Expression"
+					},
+					"table": {
+						"value": "@dataset().TableName",
+						"type": "Expression"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/linkedServices/SynapseDB')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/Source_Synapse_Table1')]",
+			"type": "Microsoft.Synapse/workspaces/datasets",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "SynapseDB",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"DbServer": {
+						"type": "string"
+					},
+					"DbName": {
+						"type": "string"
+					},
+					"Schema": {
+						"type": "string"
+					},
+					"TableName": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [],
+				"typeProperties": {
+					"schema": {
+						"value": "@dataset().Schema",
+						"type": "Expression"
+					},
+					"table": {
+						"value": "@dataset().TableName",
+						"type": "Expression"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/linkedServices/SynapseDB')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('workspaceName'), '/AXDBConnectionString')]",
 			"type": "Microsoft.Synapse/workspaces/linkedServices",
 			"apiVersion": "2019-06-01-preview",
@@ -861,6 +2226,30 @@
 			]
 		},
 		{
+			"name": "[concat(parameters('workspaceName'), '/SourceDataLake')]",
+			"type": "Microsoft.Synapse/workspaces/linkedServices",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"description": "The data lake ADLG2 storage account where F&O exports data (CSV files)",
+				"annotations": [],
+				"type": "AzureBlobFS",
+				"typeProperties": {
+					"url": "[parameters('SourceDataLake_properties_typeProperties_url')]",
+					"accountKey": {
+						"type": "SecureString",
+						"value": "[parameters('SourceDataLake_accountKey')]"
+					}
+				},
+				"connectVia": {
+					"referenceName": "AutoResolveIntegrationRuntime",
+					"type": "IntegrationRuntimeReference"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/integrationRuntimes/AutoResolveIntegrationRuntime')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('workspaceName'), '/Source_DataLake')]",
 			"type": "Microsoft.Synapse/workspaces/linkedServices",
 			"apiVersion": "2019-06-01-preview",
@@ -879,6 +2268,45 @@
 						"type": "SecureString",
 						"value": "[parameters('Source_DataLake_accountKey')]"
 					}
+				},
+				"connectVia": {
+					"referenceName": "AutoResolveIntegrationRuntime",
+					"type": "IntegrationRuntimeReference"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/integrationRuntimes/AutoResolveIntegrationRuntime')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/SynapseDB')]",
+			"type": "Microsoft.Synapse/workspaces/linkedServices",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"annotations": [],
+				"type": "AzureSqlDatabase",
+				"typeProperties": {
+					"connectionString": "[parameters('SynapseDB_connectionString')]"
+				},
+				"connectVia": {
+					"referenceName": "AutoResolveIntegrationRuntime",
+					"type": "IntegrationRuntimeReference"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/integrationRuntimes/AutoResolveIntegrationRuntime')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/TargetSQLDB')]",
+			"type": "Microsoft.Synapse/workspaces/linkedServices",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"description": "A real SQLServer database",
+				"annotations": [],
+				"type": "AzureSqlDatabase",
+				"typeProperties": {
+					"connectionString": "[parameters('TargetSQLDB_connectionString')]"
 				},
 				"connectVia": {
 					"referenceName": "AutoResolveIntegrationRuntime",
@@ -1164,6 +2592,126 @@
 			"dependsOn": [
 				"[concat(variables('workspaceId'), '/linkedServices/Source_DataLake')]",
 				"[concat(variables('workspaceId'), '/linkedServices/Target_Database')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/DataLakeToSQL_CDMToSQL_Dataflows1')]",
+			"type": "Microsoft.Synapse/workspaces/dataflows",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "DataLakeToSQL_CDMToSQL_Dataflows"
+				},
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"linkedService": {
+								"referenceName": "SourceDataLake",
+								"type": "LinkedServiceReference"
+							},
+							"name": "SourceCDMTable"
+						}
+					],
+					"sinks": [
+						{
+							"linkedService": {
+								"referenceName": "TargetSQLDB",
+								"type": "LinkedServiceReference"
+							},
+							"name": "SQLSink"
+						}
+					],
+					"transformations": [
+						{
+							"name": "RemoveColumns"
+						},
+						{
+							"name": "alterRow"
+						},
+						{
+							"name": "IdentifyColumns"
+						},
+						{
+							"name": "RankRowVersion"
+						},
+						{
+							"name": "Deduplicate"
+						}
+					],
+					"scriptLines": [
+						"parameters{",
+						"     SourceContainer as string ('dynamics365-financeandoperations'),",
+						"     ManifefastName as string,",
+						"     TableName as string,",
+						"     FromDateTime as timestamp (currentTimestamp()-days(365)),",
+						"     ToDateTime as timestamp (currentTimestamp()),",
+						"     Schema as string ('dbo'),",
+						"     DataFiles as string,",
+						"     Environment as string ('test'),",
+						"     ManifestPath as string",
+						"}",
+						"source(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     inferDriftedColumnTypes: true,",
+						"     ignoreNoFilesFound: true,",
+						"     modifiedAfter: ($FromDateTime),",
+						"     modifiedBefore: ($ToDateTime),",
+						"     entity: ($TableName),",
+						"     format: 'cdm',",
+						"     manifestType: 'manifest',",
+						"     manifestName: ($ManifefastName),",
+						"     entityPath: ($ManifestPath),",
+						"     local: true,",
+						"     folderPath: ($Environment),",
+						"     fileSystem: ($SourceContainer),",
+						"     dateFormats: ['yyyy-MM-dd'],",
+						"     timestampFormats: ['yyyy-MM-dd\\'T\\'HH:mm:ss.SSS\\'Z\\'','yyyy-MM-dd\\'T\\'HH:mm:ss\\'Z\\'','yyyy-MM-dd\\'T\\'HH:mm:ss'],",
+						"     preferredFractionalType: 'float') ~> SourceCDMTable",
+						"Deduplicate select(mapColumn(",
+						"          each(match(name!='_SysRowId'&&name!='LSN'&&name!='Update_Mask'&&name!='Start_LSN'&&name!='End_LSN'&&name!='Seq_Val'))",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> RemoveColumns",
+						"RemoveColumns alterRow(upsertIf(isNull(DML_Action)||DML_Action==\"INSERT\"||DML_Action==\"AFTER_UPDATE\"),",
+						"     deleteIf(DML_Action==\"DELETE\")) ~> alterRow",
+						"SourceCDMTable derive(Start_LSN = toString(byName(\"Start_LSN\")),",
+						"          Seq_Val = toString(byName(\"Seq_Val\")),",
+						"          DataLakeModified_DateTime = toTimestamp(byName(\"DataLakeModified_DateTime\")),",
+						"          RECID = toLong(byName(\"RECID\")),",
+						"          DML_Action = toString(byName(\"DML_Action\")),",
+						"          {_RowVersion} = 0) ~> IdentifyColumns",
+						"IdentifyColumns window(over(RECID),",
+						"     desc(Start_LSN, true),",
+						"     desc(Seq_Val, true),",
+						"     desc(DataLakeModified_DateTime, true),",
+						"     desc(DML_Action, true),",
+						"     {_RowVersion} = denseRank()) ~> RankRowVersion",
+						"RankRowVersion filter(toLong(byName(\"_RowVersion\"))==1) ~> Deduplicate",
+						"alterRow sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     format: 'table',",
+						"     store: 'sqlserver',",
+						"     schemaName: ($Schema),",
+						"     tableName: ($TableName),",
+						"     preSQLs:[(\"begin tran; update  [dbo].[_ControlTableForCopy] set LastCopyStatus = 1 where TableSchema = '{$Schema}' and TableName = '{$TableName}'; if ('{$ManifefastName}' != 'ChangeFeed') truncate table {$Schema}.{$TableName}; commit tran;\")],",
+						"     insertable: true,",
+						"     updateable: true,",
+						"     deletable: true,",
+						"     upsertable: true,",
+						"     keys:['RECID'],",
+						"     postSQLs:[(\"begin tran; declare @ChildItems nvarchar(max)= '{$DataFiles}'; declare @ToDateTime DateTime= '{toString($ToDateTime)}'; declare @LastFileName nvarchar(200) = (select max(name) from Openjson(@ChildItems) with (name nvarchar(100) '$.name') where name != 'index.json');  update  [dbo].[_ControlTableForCopy] set LastCopyDateTime =@ToDateTime, LastCopyDuration= DATEDIFF(MINUTE, @ToDateTime, GETUTCDATE()), LastCopyMarker = @LastFileName, LastCopyStatus = 0 where TableSchema = '{$Schema}' and TableName = '{$TableName}'  commit tran;\")],",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true,",
+						"     errorHandlingOption: 'stopOnFirstError',",
+						"     preCommands: [],",
+						"     postCommands: []) ~> SQLSink"
+					]
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/linkedServices/SourceDataLake')]",
+				"[concat(variables('workspaceId'), '/linkedServices/TargetSQLDB')]"
 			]
 		},
 		{
@@ -1733,711 +3281,6 @@
 				"type": "SqlQuery"
 			},
 			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('workspaceName'), '/TargetSQLDB')]",
-			"type": "Microsoft.Synapse/workspaces/linkedServices",
-			"apiVersion": "2019-06-01-preview",
-			"properties": {
-				"description": "A real SQLServer database",
-				"annotations": [],
-				"type": "AzureSqlDatabase",
-				"typeProperties": {
-					"connectionString": "[parameters('TargetSQLDB_connectionString')]"
-				},
-				"connectVia": {
-					"referenceName": "AutoResolveIntegrationRuntime",
-					"type": "IntegrationRuntimeReference"
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('workspaceId'), '/integrationRuntimes/AutoResolveIntegrationRuntime')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('workspaceName'), '/SourceDataLake')]",
-			"type": "Microsoft.Synapse/workspaces/linkedServices",
-			"apiVersion": "2019-06-01-preview",
-			"properties": {
-				"description": "The data lake ADLG2 storage account where F&O exports data (CSV files)",
-				"annotations": [],
-				"type": "AzureBlobFS",
-				"typeProperties": {
-					"url": "[parameters('SourceDataLake_properties_typeProperties_url')]",
-					"accountKey": {
-						"type": "SecureString",
-						"value": "[parameters('SourceDataLake_accountKey')]"
-					}
-				},
-				"connectVia": {
-					"referenceName": "AutoResolveIntegrationRuntime",
-					"type": "IntegrationRuntimeReference"
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('workspaceId'), '/integrationRuntimes/AutoResolveIntegrationRuntime')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('workspaceName'), '/SynapseDB')]",
-			"type": "Microsoft.Synapse/workspaces/linkedServices",
-			"apiVersion": "2019-06-01-preview",
-			"properties": {
-				"annotations": [],
-				"type": "AzureSqlDatabase",
-				"typeProperties": {
-					"connectionString": "[parameters('SynapseDB_connectionString')]"
-				},
-				"connectVia": {
-					"referenceName": "AutoResolveIntegrationRuntime",
-					"type": "IntegrationRuntimeReference"
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('workspaceId'), '/integrationRuntimes/AutoResolveIntegrationRuntime')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('workspaceName'), '/DataLakeToSQL_CSV_File_Dataset1')]",
-			"type": "Microsoft.Synapse/workspaces/datasets",
-			"apiVersion": "2019-06-01-preview",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "SourceDataLake",
-					"type": "LinkedServiceReference",
-					"parameters": {}
-				},
-				"parameters": {
-					"Container": {
-						"type": "string"
-					},
-					"Folder": {
-						"type": "string"
-					},
-					"StorageAccount": {
-						"type": "string"
-					}
-				},
-				"annotations": [],
-				"type": "DelimitedText",
-				"typeProperties": {
-					"location": {
-						"type": "AzureBlobFSLocation",
-						"folderPath": {
-							"value": "@dataset().Folder",
-							"type": "Expression"
-						},
-						"fileSystem": {
-							"value": "@dataset().Container",
-							"type": "Expression"
-						}
-					},
-					"columnDelimiter": ",",
-					"escapeChar": "\\",
-					"quoteChar": "\""
-				},
-				"schema": []
-			},
-			"dependsOn": [
-				"[concat(variables('workspaceId'), '/linkedServices/SourceDataLake')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('workspaceName'), '/Source_Synapse_Table')]",
-			"type": "Microsoft.Synapse/workspaces/datasets",
-			"apiVersion": "2019-06-01-preview",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "SynapseDB",
-					"type": "LinkedServiceReference",
-					"parameters": {}
-				},
-				"parameters": {
-					"DbServer": {
-						"type": "string"
-					},
-					"DbName": {
-						"type": "string"
-					},
-					"Schema": {
-						"type": "string"
-					},
-					"TableName": {
-						"type": "string"
-					}
-				},
-				"annotations": [],
-				"type": "AzureSqlTable",
-				"schema": [],
-				"typeProperties": {
-					"schema": {
-						"value": "@dataset().Schema",
-						"type": "Expression"
-					},
-					"table": {
-						"value": "@dataset().TableName",
-						"type": "Expression"
-					}
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('workspaceId'), '/linkedServices/SynapseDB')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('workspaceName'), '/DestinationSQLTable')]",
-			"type": "Microsoft.Synapse/workspaces/datasets",
-			"apiVersion": "2019-06-01-preview",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "TargetSQLDB",
-					"type": "LinkedServiceReference",
-					"parameters": {}
-				},
-				"parameters": {
-					"DbServer": {
-						"type": "string"
-					},
-					"DbName": {
-						"type": "string"
-					},
-					"Schema": {
-						"type": "string"
-					},
-					"TableName": {
-						"type": "string"
-					}
-				},
-				"annotations": [],
-				"type": "AzureSqlTable",
-				"schema": [],
-				"typeProperties": {
-					"schema": {
-						"value": "@dataset().Schema",
-						"type": "Expression"
-					},
-					"table": {
-						"value": "@dataset().TableName",
-						"type": "Expression"
-					}
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('workspaceId'), '/linkedServices/TargetSQLDB')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('workspaceName'), '/DataLakeToSQLCopy')]",
-			"type": "Microsoft.Synapse/workspaces/pipelines",
-			"apiVersion": "2019-06-01-preview",
-			"properties": {
-				"activities": [
-					{
-						"name": "ForEachTables",
-						"type": "ForEach",
-						"dependsOn": [
-							{
-								"activity": "GetControlTable",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"items": {
-								"value": "@activity('GetControlTable').output.value",
-								"type": "Expression"
-							},
-							"activities": [
-								{
-									"name": "SetFromDateTime",
-									"type": "SetVariable",
-									"dependsOn": [],
-									"userProperties": [],
-									"typeProperties": {
-										"variableName": "FromDateTime",
-										"value": {
-											"value": "@item().LastCopyDateTime",
-											"type": "Expression"
-										}
-									}
-								},
-								{
-									"name": "SetToDateTime",
-									"type": "SetVariable",
-									"dependsOn": [],
-									"userProperties": [],
-									"typeProperties": {
-										"variableName": "ToDateTime",
-										"value": {
-											"value": "@utcnow()",
-											"type": "Expression"
-										}
-									}
-								},
-								{
-									"name": "CheckForNewFiles",
-									"type": "GetMetadata",
-									"dependsOn": [
-										{
-											"activity": "SetToDateTime",
-											"dependencyConditions": [
-												"Succeeded"
-											]
-										},
-										{
-											"activity": "SetFromDateTime",
-											"dependencyConditions": [
-												"Succeeded"
-											]
-										}
-									],
-									"policy": {
-										"timeout": "7.00:00:00",
-										"retry": 0,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [
-										{
-											"name": "TABLE_NAME",
-											"value": "@item().dataLocation"
-										}
-									],
-									"typeProperties": {
-										"dataset": {
-											"referenceName": "DataLakeToSQL_CSV_File_Dataset1",
-											"type": "DatasetReference",
-											"parameters": {
-												"Container": {
-													"value": "@item().SourceContainer",
-													"type": "Expression"
-												},
-												"Folder": {
-													"value": "@concat(item().Environment,'/', item().DataLocation)",
-													"type": "Expression"
-												},
-												"StorageAccount": {
-													"value": "@item().StorageAccount",
-													"type": "Expression"
-												}
-											}
-										},
-										"fieldList": [
-											"childItems"
-										],
-										"storeSettings": {
-											"type": "AzureBlobFSReadSettings",
-											"recursive": true,
-											"modifiedDatetimeStart": {
-												"value": "@variables('FromDateTime')",
-												"type": "Expression"
-											},
-											"modifiedDatetimeEnd": {
-												"value": "@variables('ToDateTime')",
-												"type": "Expression"
-											},
-											"enablePartitionDiscovery": false
-										},
-										"formatSettings": {
-											"type": "DelimitedTextReadSettings"
-										}
-									}
-								},
-								{
-									"name": "ArchiveChangeFeed",
-									"type": "IfCondition",
-									"dependsOn": [
-										{
-											"activity": "CopyAndMerge",
-											"dependencyConditions": [
-												"Succeeded"
-											]
-										}
-									],
-									"userProperties": [],
-									"typeProperties": {
-										"expression": {
-											"value": "@and(startswith(item().DataLocation,'/ChangeFeed'),greater(length(activity('CheckForNewFiles').output.childItems),1))",
-											"type": "Expression"
-										},
-										"ifTrueActivities": [
-											{
-												"name": "DeleteFiles",
-												"type": "Delete",
-												"dependsOn": [],
-												"policy": {
-													"timeout": "7.00:00:00",
-													"retry": 0,
-													"retryIntervalInSeconds": 30,
-													"secureOutput": false,
-													"secureInput": false
-												},
-												"userProperties": [],
-												"typeProperties": {
-													"dataset": {
-														"referenceName": "DataLakeToSQL_CSV_File_Dataset1",
-														"type": "DatasetReference",
-														"parameters": {
-															"Container": {
-																"value": "@item().SourceContainer",
-																"type": "Expression"
-															},
-															"Folder": {
-																"value": "@concat(item().Environment,item().DataLocation)",
-																"type": "Expression"
-															},
-															"StorageAccount": {
-																"value": "@item().StorageAccount",
-																"type": "Expression"
-															}
-														}
-													},
-													"enableLogging": false,
-													"storeSettings": {
-														"type": "AzureBlobFSReadSettings",
-														"recursive": false,
-														"modifiedDatetimeEnd": {
-															"value": "@variables('ToDateTime')",
-															"type": "Expression"
-														},
-														"wildcardFileName": "*.csv",
-														"enablePartitionDiscovery": false
-													}
-												}
-											}
-										]
-									}
-								},
-								{
-									"name": "CopyAndMerge",
-									"type": "Switch",
-									"dependsOn": [
-										{
-											"activity": "CheckForNewFiles",
-											"dependencyConditions": [
-												"Succeeded"
-											]
-										}
-									],
-									"userProperties": [],
-									"typeProperties": {
-										"on": {
-											"value": "@if(lessOrEquals(length(activity('CheckForNewFiles').output.childItems),1),'Default', \nif(endswith(pipeline().parameters.DbServer, '.sql.azuresynapse.net'), 'DedicatedPool',\nif(and(equals(pipeline().parameters.SourceDbServer, null),endswith(pipeline().parameters.DbServer, '.database.windows.net')), 'AzureSQL_Dataflow', \nif(and(not(equals(pipeline().parameters.SourceDbServer, null)), endswith(pipeline().parameters.DbServer, '.database.windows.net')), 'AzureSQL_Serverless'\n,'Default' ))))",
-											"type": "Expression"
-										},
-										"cases": [
-											{
-												"value": "AzureSQL_Dataflow",
-												"activities": [
-													{
-														"name": "DataLakeToSQL_CDMToSQL_Dataflows",
-														"type": "ExecuteDataFlow",
-														"dependsOn": [],
-														"policy": {
-															"timeout": "1.00:00:00",
-															"retry": 2,
-															"retryIntervalInSeconds": 30,
-															"secureOutput": false,
-															"secureInput": false
-														},
-														"userProperties": [
-															{
-																"name": "EntityName",
-																"value": "@item().entityName"
-															}
-														],
-														"typeProperties": {
-															"staging": {},
-															"compute": {
-																"coreCount": 8,
-																"computeType": "General"
-															},
-															"traceLevel": "None",
-															"cacheSinks": {
-																"firstRowOnly": true
-															}
-														}
-													}
-												]
-											},
-											{
-												"value": "DedicatedPool",
-												"activities": [
-													{
-														"name": "CopyAndMergeData",
-														"type": "Script",
-														"dependsOn": [],
-														"policy": {
-															"timeout": "7.00:00:00",
-															"retry": 2,
-															"retryIntervalInSeconds": 30,
-															"secureOutput": false,
-															"secureInput": false
-														},
-														"userProperties": [],
-														"linkedServiceName": {
-															"referenceName": "TargetSQLDB",
-															"type": "LinkedServiceReference",
-															"parameters": {}
-														},
-														"typeProperties": {
-															"scripts": [
-																{
-																	"type": "Query",
-																	"text": {
-																		"value": "\nDeclare @Schema nvarchar(20) = '@{item().Schema}';\nDeclare @TableName nvarchar(200) = '@{item().EntityName}';\nDeclare @ChildItems nvarchar(max)='@{activity('CheckForNewFiles').output.childItems}'; \nDeclare @ToDateTime DateTime2='@{variables('ToDateTime')}'; \n\nDeclare @DataLocation varchar(2000);\nDeclare @Incremental bit;\n\nSELECT TOP 1  \n\t@DataLocation = DataLocation,\n\t@Incremental = (CASE \t\n\tWHEN (LastCopyDateTime is  Null OR Incremental = 0 ) THEN 0\n\tELSE 1 END)\nFrom _ControlTableForCopy \nwhere \n\tTableSchema = @Schema\n\tand TableName =  @TableName\n\n-- Update status to 1- In Progress \nUpdate _ControlTableForCopy\n\tset LastCopyStatus = 1\nwhere \n\tTableSchema = @Schema\n\tand TableName =  @TableName\n\ndeclare @LastFileName nvarchar(200);\n\nSELECT \n\t@LastFileName = max(name) \nFROM Openjson(@ChildItems) \nWITH \n\t(name nvarchar(100) '$.name') \nWHERE \n\tname != 'index.json';  \n\n-- full export, create a new table from staging table schema, copy the data and then swap the object\nIF (@Incremental = 0)\nBEGIN\n\n\tdeclare @FullCopyTemplate nvarchar(max) = '\n\tIF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N''[{schema}].[_new_{TableName}]'') AND type in (N''U''))\n\tDROP TABLE [{schema}].[_new_{TableName}]\n\t\n\tCreate Table {schema}._new_{TableName} with (Distribution = Hash(RecId)) \n\tas Select top 0 * from {schema}.{TableName}\n\n\tCopy Into {schema}._new_{TableName}\n\tFrom ''{DataLocation}''\n\tWITH (\n\t\t FILE_TYPE = ''CSV'',\n\t\t CREDENTIAL = (IDENTITY = ''Managed Identity'')\n\t );\n\n\tRENAME OBJECT::{schema}.{TableName}  TO _old_{TableName};\n\tRENAME OBJECT {schema}._new_{TableName} TO {TableName};\n\tDROP TABLE {schema}._old_{TableName};\n\t\n\tUPDATE  [dbo].[_ControlTableForCopy] \n\tSET \n\t\tLastCopyDateTime =''{ToDateTime}'', \n\t\tLastCopyMarker = ''{LastFileName}'',\n\t\tLastCopyStatus = 0,\n\t\tLastCopyDuration = datediff(MINUTE, ''{ToDateTime}'', GETUTCDATE() )\n\tWHERE \n\t\tTableSchema = ''{Schema}'' \n\t\tAND TableName = ''{TableName}''  \n\n\t'\n\n\tdeclare @FullCopyStatement nvarchar(max) = replace(replace(replace(replace(replace(@FullCopyTemplate, '{Schema}', @Schema)\n\t\t\t\t\t\t\t\t\t\t\t\t\t, '{TableName}', @TableName)\n\t\t\t\t\t\t\t\t\t\t\t\t, '{DataLocation}', @DataLocation)\n\t\t\t\t\t\t\t\t\t\t\t\t, '{LastFileName}', @LastFileName) \n\t\t\t\t\t\t\t\t\t\t\t\t, '{ToDateTime}', @ToDateTime) ;\n\tPrint(@FullCopyStatement);\n\tExecute sp_executesql  @FullCopyStatement;\n\nEND \n\n-- Incremental Table Create, Copy Into, Dedplicate and Merge\nELSE\n\tBEGIN;\n\t\tDeclare @CDCDataLocation varchar(2000);\n\t\tDeclare @CDCColumnList varchar(max);\n\t\tdeclare @UpdateColumns nvarchar(max);\n\t\tdeclare @InsertColumns nvarchar(max);\n\t\tdeclare @InsertValues nvarchar(max);\n\n\n\t\tset @CDCDataLocation = concat(SubString(@DataLocation, 0, CharIndex('/Tables/', @DataLocation)) , '/ChangeFeed/', @TableName, '/*.csv')\n\n\t\tSelect \n\t\t\t@CDCColumnList = ColumnList \n\t\tfrom _sqlmetadata \n        where\n            EntityName = '_cdc_' + @TableName\n            and Environment =  (select top 1 environment from  _controltableforcopy  where TableName = @TableName and TableSchema = @Schema)\n\n\t\tSelect\n\t\t\t@UpdateColumns = STRING_AGG(CONVERT(NVARCHAR(max), 'T.' + COLUMN_NAME + ' = S.'  + COLUMN_NAME), ','),\n\t\t\t@InsertColumns = STRING_AGG(CONVERT(NVARCHAR(max), COLUMN_NAME), ',')\n\t\tFROM INFORMATION_SCHEMA.COLUMNS \n\t\tWHERE TABLE_NAME = @TableName\n\t\tand  TABLE_SCHEMA = @Schema\n\n\t\tset @UpdateColumns = replace(replace(replace(@UpdateColumns, 'S._SysRowId', 'S.RecId'),'S.LSN', 'S.Start_LSN'),',T.RecId = S.RecId','');\n\t\tset @InsertValues = replace(replace(@InsertColumns, '_SysRowId', 'RecId'), 'LSN', 'Start_LSN');\n\n\t\tdeclare @IncrementalCopyTemplate nvarchar(max) =\n\t\t'print(''Create Table : {Schema}._cdc_{TableName}'' );\n\n\t\tIF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N''[{schema}].[_cdc_{TableName}]'') AND type in (N''U''))\n\t\tDROP TABLE [{schema}].[_cdc_{TableName}]\n\n\t\tcreate table {Schema}._cdc_{TableName} ({CDCColumnList})\n\t\tWith (Distribution = Hash(RecId))\n\t\t\n\t\tprint(''Copy Into : {Schema}._cdc_{TableName} {CDCColumnList}'' );\n\t\tCopy Into {Schema}._cdc_{TableName} \n\t\t\tFrom ''{CDCDataLocation}''\n\t\t\tWITH (\n\t\t\t\t\tFILE_TYPE = ''CSV'',\n\t\t\t\t\tCREDENTIAL = (IDENTITY = ''Managed Identity'')\n\t\t\t\t)\n\t\t\n\t\tprint(''Deduplicate Data: {Schema}._cdc_{TableName}'' );\n\n\t\tDelete FROM X\n\t\tFROM \n\t\t(\n\t\t\tSELECT \n\t\t\tROW_NUMBER() OVER (PARTITION BY RECID ORDER BY Start_LSN DESC, Seq_Val DESC, DataLakeModified_DateTime DESC) AS ROWNO,\n\t\t\t*\n\t\t\tFROM {Schema}._cdc_{TableName}\n\t\t\t\n\t\t) AS X\n\t\tWHERE X.ROWNO > 1\n\t\t\n\t\tprint(''Merge Data: {Schema}._cdc_{TableName}'' );\n\n\t\tMERGE {Schema}.{TableName} T USING {Schema}._cdc_{TableName}  S\n\t\t\tON T.RECID = S.RECID\n\t\t  WHEN MATCHED and S.DML_Action <> ''DELETE''\n\t\t\tTHEN UPDATE SET \n\t\t\t\t{UpdateColumn}\n\t\t  WHEN NOT MATCHED BY TARGET and S.DML_Action <> ''DELETE''  \n\t\t\tTHEN INSERT ({InsertColumn})\n\t\t\tValues ({InsertValues})\n\t\t  WHEN MATCHED and S.DML_Action = ''DELETE''\n\t\t\t THEN DELETE;\n\n\t\tUPDATE  [dbo].[_ControlTableForCopy] \n\t\tSET \n\t\t\tLastCopyDateTime =''{ToDateTime}'', \n\t\t\tLastCopyMarker = ''{LastFileName}'',\n\t\t\tLastCopyDuration = datediff(MINUTE, ''{ToDateTime}'', GETUTCDATE() ),\n\t\t\tLastCopyStatus = 0\n\t\tWHERE \n\t\tTableSchema = ''{Schema}'' \n\t\tAND TableName = ''{TableName}''   \n\n\t\tDrop Table {Schema}._cdc_{TableName}\n\t\t'\n\n\t\tdeclare @IncrementalCopyStatement nvarchar(max) = replace(replace(replace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(@IncrementalCopyTemplate, '{Schema}', @Schema)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{TableName}', @TableName)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{CDCColumnList}', @CDCColumnList)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{CDCDataLocation}',@CDCDataLocation)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{UpdateColumn}', @UpdateColumns)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{InsertColumn}', @InsertColumns)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t,'{InsertValues}',@InsertValues)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{LastFileName}', @LastFileName) \n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{ToDateTime}', @ToDateTime) ;\n\n\t\tprint(@IncrementalCopyStatement);\n\t\tExecute sp_executesql  @IncrementalCopyStatement;\n\tEND;\n\t\n\t",
-																		"type": "Expression"
-																	}
-																}
-															],
-															"logSettings": {
-																"logDestination": "ActivityOutput"
-															}
-														}
-													}
-												]
-											},
-											{
-												"value": "AzureSQL_Serverless",
-												"activities": [
-													{
-														"name": "CopyData",
-														"type": "Copy",
-														"dependsOn": [],
-														"policy": {
-															"timeout": "0.12:00:00",
-															"retry": 0,
-															"retryIntervalInSeconds": 30,
-															"secureOutput": false,
-															"secureInput": false
-														},
-														"userProperties": [],
-														"typeProperties": {
-															"source": {
-																"type": "AzureSqlSource",
-																"queryTimeout": "02:00:00",
-																"partitionOption": "None"
-															},
-															"sink": {
-																"type": "AzureSqlSink",
-																"preCopyScript": {
-																	"value": "\tIF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[@{item().Schema}].[_new_@{item().EntityName}]') AND type in (N'U'))\n\tDROP TABLE [@{item().Schema}].[_new_@{item().EntityName}]",
-																	"type": "Expression"
-																},
-																"writeBehavior": "insert",
-																"sqlWriterUseTableLock": false,
-																"tableOption": "autoCreate",
-																"disableMetricsCollection": false
-															},
-															"enableStaging": false,
-															"translator": {
-																"type": "TabularTranslator",
-																"typeConversion": true,
-																"typeConversionSettings": {
-																	"allowDataTruncation": true,
-																	"treatBooleanAsNumber": false
-																}
-															}
-														},
-														"inputs": [
-															{
-																"referenceName": "Source_Synapse_Table",
-																"type": "DatasetReference",
-																"parameters": {
-																	"DbServer": {
-																		"value": "@pipeline().parameters.SourceDbServer",
-																		"type": "Expression"
-																	},
-																	"DbName": {
-																		"value": "@pipeline().parameters.SourceDbName",
-																		"type": "Expression"
-																	},
-																	"Schema": {
-																		"value": "@item().Schema",
-																		"type": "Expression"
-																	},
-																	"TableName": {
-																		"value": "@item().EntityName",
-																		"type": "Expression"
-																	}
-																}
-															}
-														],
-														"outputs": [
-															{
-																"referenceName": "DestinationSQLTable",
-																"type": "DatasetReference",
-																"parameters": {
-																	"DbServer": {
-																		"value": "@pipeline().parameters.DbServer",
-																		"type": "Expression"
-																	},
-																	"DbName": {
-																		"value": "@pipeline().parameters.DbName",
-																		"type": "Expression"
-																	},
-																	"Schema": {
-																		"value": "@pipeline().parameters.Schema",
-																		"type": "Expression"
-																	},
-																	"TableName": {
-																		"value": "_new_@{item().EntityName}",
-																		"type": "Expression"
-																	}
-																}
-															}
-														]
-													},
-													{
-														"name": "MergeData",
-														"type": "Script",
-														"dependsOn": [
-															{
-																"activity": "CopyData",
-																"dependencyConditions": [
-																	"Succeeded"
-																]
-															}
-														],
-														"policy": {
-															"timeout": "0.12:00:00",
-															"retry": 0,
-															"retryIntervalInSeconds": 30,
-															"secureOutput": false,
-															"secureInput": false
-														},
-														"userProperties": [],
-														"linkedServiceName": {
-															"referenceName": "TargetSQLDB",
-															"type": "LinkedServiceReference",
-															"parameters": {}
-														},
-														"typeProperties": {
-															"scripts": [
-																{
-																	"type": "NonQuery",
-																	"text": {
-																		"value": "Declare @Schema nvarchar(20) = '@{item().Schema}';\nDeclare @TableName nvarchar(200) = '@{item().EntityName}';\nDeclare @ChildItems nvarchar(max)='@{activity('CheckForNewFiles').output.childItems}'; \nDeclare @ToDateTime DateTime2='@{variables('ToDateTime')}'; \n\nDeclare @DataLocation varchar(2000);\nDeclare @Incremental bit;\n\nSELECT TOP 1  \n\t@DataLocation = DataLocation,\n\t@Incremental = (CASE \t\n\tWHEN (LastCopyDateTime is  Null OR Incremental = 0 ) THEN 0\n\tELSE 1 END)\nFrom _ControlTableForCopy \nwhere \n\tTableSchema = @Schema\n\tand TableName =  @TableName\n\n-- Update status to 1- In Progress \nUpdate _ControlTableForCopy\n\tset LastCopyStatus = 1\nwhere \n\tTableSchema = @Schema\n\tand TableName =  @TableName\n\ndeclare @LastFileName nvarchar(200);\n\nSELECT \n\t@LastFileName = max(name) \nFROM Openjson(@ChildItems) \nWITH \n\t(name nvarchar(100) '$.name') \nWHERE \n\tname != 'index.json';  \n\n-- full export, create a new table from staging table schema, copy the data and then swap the object\nIF (@Incremental = 0)\nBEGIN\n\n\tdeclare @FullCopyTemplate nvarchar(max) = '\n\tIF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N''[{schema}].[{TableName}]'') AND type in (N''U''))\n\tExec sp_rename ''{schema}.{TableName}'', ''_old_{TableName}'';\n\n\tExec sp_rename ''{schema}._new_{TableName}'', ''{TableName}'';\n\t\n\tIF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N''[{schema}].[_old_{TableName}]'') AND type in (N''U''))\n\tDROP TABLE {schema}._old_{TableName};\n\t\n\tUPDATE  [dbo].[_ControlTableForCopy] \n\tSET \n\t\tLastCopyDateTime =''{ToDateTime}'', \n\t\tLastCopyMarker = ''{LastFileName}'',\n\t\tLastCopyStatus = 0,\n\t\tLastCopyDuration = datediff(MINUTE, ''{ToDateTime}'', GETUTCDATE() )\n\tWHERE \n\t\tTableSchema = ''{Schema}'' \n\t\tAND TableName = ''{TableName}''  \n\n\t'\n\n\tdeclare @FullCopyStatement nvarchar(max) = replace(replace(replace(replace(@FullCopyTemplate, '{Schema}', @Schema)\n\t\t\t\t\t\t\t\t\t\t\t\t, '{TableName}', @TableName)\n\t\t\t\t\t\t\t\t\t\t\t\t, '{LastFileName}', @LastFileName) \n\t\t\t\t\t\t\t\t\t\t\t\t, '{ToDateTime}', @ToDateTime) ;\n\tPrint(@FullCopyStatement);\n\tExecute sp_executesql  @FullCopyStatement;\n\nEND \n\n-- Incremental Table Create, Copy Into, Dedplicate and Merge\nELSE\n\tBEGIN;\n\t\tDeclare @CDCDataLocation varchar(2000);\n\t\tDeclare @CDCColumnList varchar(max);\n\t\tdeclare @UpdateColumns nvarchar(max);\n\t\tdeclare @InsertColumns nvarchar(max);\n\t\tdeclare @InsertValues nvarchar(max);\n\n\t\tSelect \n\t\t\t@CDCColumnList = ColumnList \n\t\tfrom _sqlmetadata \n\t\twhere \n\t\t\tEntityName = '_cdc_' + @TableName;\n\n\t\tSelect\n\t\t\t@UpdateColumns = STRING_AGG(CONVERT(NVARCHAR(max), 'T.' + COLUMN_NAME + ' = S.'  + COLUMN_NAME), ','),\n\t\t\t@InsertColumns = STRING_AGG(CONVERT(NVARCHAR(max), COLUMN_NAME), ',')\n\t\tFROM INFORMATION_SCHEMA.COLUMNS \n\t\tWHERE TABLE_NAME = @TableName\n\t\tand  TABLE_SCHEMA = @Schema\n\n\t\tset @UpdateColumns = replace(replace(replace(@UpdateColumns, 'S._SysRowId', 'S.RecId'),'S.LSN', 'S.Start_LSN'),',T.RecId = S.RecId','');\n\t\tset @InsertValues = replace(replace(@InsertColumns, '_SysRowId', 'RecId'), 'LSN', 'Start_LSN');\n\n\t\tdeclare @IncrementalCopyTemplate nvarchar(max) =\n\t\t'\n\t\tDelete FROM X\n\t\tFROM \n\t\t(\n\t\t\tSELECT \n\t\t\tROW_NUMBER() OVER (PARTITION BY RECID ORDER BY Start_LSN DESC, Seq_Val DESC, DataLakeModified_DateTime DESC) AS ROWNO,\n\t\t\t*\n\t\t\tFROM {Schema}._new_{TableName}\n\t\t\t\n\t\t) AS X\n\t\tWHERE X.ROWNO > 1\n\t\t\n\t\tprint(''Merge Data: {Schema}._new_{TableName}'' );\n\n\t\tMERGE {Schema}.{TableName} T USING {Schema}._new_{TableName}  S\n\t\t\tON T.RECID = S.RECID\n\t\t  WHEN MATCHED and S.DML_Action <> ''DELETE''\n\t\t\tTHEN UPDATE SET \n\t\t\t\t{UpdateColumn}\n\t\t  WHEN NOT MATCHED BY TARGET and S.DML_Action <> ''DELETE''  \n\t\t\tTHEN INSERT ({InsertColumn})\n\t\t\tValues ({InsertValues})\n\t\t  WHEN MATCHED and S.DML_Action = ''DELETE''\n\t\t\t THEN DELETE;\n\n\t\tUPDATE  [dbo].[_ControlTableForCopy] \n\t\tSET \n\t\t\tLastCopyDateTime =''{ToDateTime}'', \n\t\t\tLastCopyMarker = ''{LastFileName}'',\n\t\t\tLastCopyDuration = datediff(MINUTE, ''{ToDateTime}'', GETUTCDATE() ),\n\t\t\tLastCopyStatus = 0\n\t\tWHERE \n\t\tTableSchema = ''{Schema}'' \n\t\tAND TableName = ''{TableName}''   \n\n\t\tDrop Table {Schema}._new_{TableName}\n\t\t'\n\n\t\tdeclare @IncrementalCopyStatement nvarchar(max) = replace(replace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\treplace(@IncrementalCopyTemplate, '{Schema}', @Schema)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{TableName}', @TableName)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{CDCColumnList}', @CDCColumnList)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{UpdateColumn}', @UpdateColumns)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{InsertColumn}', @InsertColumns)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t,'{InsertValues}',@InsertValues)\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{LastFileName}', @LastFileName) \n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t, '{ToDateTime}', @ToDateTime) ;\n\n\t\tprint(@IncrementalCopyStatement);\n\t\tExecute sp_executesql  @IncrementalCopyStatement;\n\tEND;\n\t\n\t",
-																		"type": "Expression"
-																	}
-																}
-															],
-															"scriptBlockExecutionTimeout": "02:00:00"
-														}
-													}
-												]
-											}
-										],
-										"defaultActivities": [
-											{
-												"name": "UpdateLastCopyDateTime",
-												"type": "Script",
-												"dependsOn": [],
-												"policy": {
-													"timeout": "0.12:00:00",
-													"retry": 0,
-													"retryIntervalInSeconds": 30,
-													"secureOutput": false,
-													"secureInput": false
-												},
-												"userProperties": [],
-												"linkedServiceName": {
-													"referenceName": "TargetSQLDB",
-													"type": "LinkedServiceReference",
-													"parameters": {}
-												},
-												"typeProperties": {
-													"scripts": [
-														{
-															"type": "NonQuery",
-															"text": {
-																"value": "Declare @ToDateTime DateTime2='@{variables('ToDateTime')}'; \n\nupdate _ControlTableForCopy \nset LastCopyDateTime = @ToDateTime\nwhere \nTableSchema = '@{item().Schema}'\nand TableName = '@{item().EntityName}'",
-																"type": "Expression"
-															}
-														}
-													]
-												}
-											}
-										]
-									}
-								}
-							]
-						}
-					},
-					{
-						"name": "GetControlTable",
-						"type": "Lookup",
-						"dependsOn": [],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {},
-							"firstRowOnly": false
-						}
-					}
-				],
-				"policy": {
-					"elapsedTimeMetric": {},
-					"cancelAfter": {}
-				},
-				"parameters": {
-					"Schema": {
-						"type": "string",
-						"defaultValue": "dbo"
-					},
-					"TableNames": {
-						"type": "string",
-						"defaultValue": "InventTable"
-					},
-					"DbServer": {
-						"type": "string",
-						"defaultValue": "techdeliverydatalake.database.windows.net.database.windows.netBServer"
-					},
-					"DbName": {
-						"type": "string",
-						"defaultValue": "pipeline-target"
-					},
-					"SourceDbServer": {
-						"type": "string",
-						"defaultValue": "techdeliverydatalaketesting-ondemand.sql.azuresynapse.net"
-					},
-					"SourceDbName": {
-						"type": "string",
-						"defaultValue": "fno2"
-					}
-				},
-				"variables": {
-					"FromDateTime": {
-						"type": "String",
-						"defaultValue": "1900-01-01T00:00:00Z"
-					},
-					"ToDateTime": {
-						"type": "String",
-						"defaultValue": "9999-12-31T00:00:00Z"
-					}
-				},
-				"folder": {
-					"name": "DataLakeToSQLCopy"
-				},
-				"annotations": [],
-				"lastPublishTime": "2022-12-09T20:08:43Z"
-			},
-			"dependsOn": [
-				"[concat(variables('workspaceId'), '/datasets/DataLakeToSQL_CSV_File_Dataset1')]",
-				"[concat(variables('workspaceId'), '/linkedServices/TargetSQLDB')]",
-				"[concat(variables('workspaceId'), '/integrationRuntimes/AutoResolveIntegrationRuntime')]",
-				"[concat(variables('workspaceId'), '/datasets/Source_Synapse_Table')]",
-				"[concat(variables('workspaceId'), '/datasets/DestinationSQLTable')]"
-			]
 		}
 	]
 }
